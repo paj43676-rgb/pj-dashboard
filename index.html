@@ -226,16 +226,16 @@ select.mini{background:var(--card);border:1px solid var(--border);color:var(--te
 </div>
 <div id="toasts"></div>
 <script>
-/* ================== تنظیمات ================== */
+  /* ================== تنظیمات ================== */
 const CONFIG={
   TD_KEY:"",
   PRICES_URL:"https://raw.githubusercontent.com/paj43676-rgb/pj-dashboard/main/data/prices.json",
   PRICES_POLL:60000,
   PROXIES:[
-    "https://curly-band-940a.paj424476.workers.dev/",
     "https://api.allorigins.win/raw?url=",
     "https://corsproxy.io/?url=",
-    "https://api.codetabs.com/v1/proxy?quest="
+    "https://api.codetabs.com/v1/proxy?quest=",
+    "https://curly-band-940a.paj424476.workers.dev/?url="
   ],
   PROXY_TIMEOUT:6500
 };
@@ -288,7 +288,7 @@ async function fetchText(url,timeout){
       const txt=await r.text();
       if(txt&&txt.length>10){PROXY_BEST=pi;PROXY_BAD.delete(pi);return txt}
       throw new Error('empty');
-    }catch(e){clearTimeout(t);PROXY_BAD.set(pi,Date.now()+120000);lastErr=e}
+    }catch(e){clearTimeout(t);PROXY_BAD.set(pi,Date.now()+300000);lastErr=e}
   }
   throw lastErr||new Error('proxy failed');
 }
@@ -312,18 +312,13 @@ async function yahoo(sym,interval,range){
   }
 }
 async function bKlines(interval,limit,sym='BTCUSDT'){
-  const k=await fetchJSON(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${interval}&limit=${limit}`);
+  const k=await fetchJSON(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${interval}&limit=${limit}`,5000);
   return{t:k.map(x=>x[0]),c:k.map(x=>+x[4])};
 }
-async function bTicker(){const j=await fetchJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');return{price:+j.lastPrice,prev:+j.openPrice}}
-async function paxgTicker(){const j=await fetchJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT');return{price:+j.lastPrice,prev:+j.openPrice}}
-async function cbPrice(pair){const j=await fetchJSON(`https://api.coinbase.com/v2/prices/${pair}/spot`);const p=+j.data.amount;if(!p)throw new Error('cb');return p}
-async function cgPrice(id){const j=await fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true`);const o=j[id];if(!o||!o.usd)throw new Error('cg');return{p:o.usd,pc:o.usd/(1+(o.usd_24h_change||0)/100)}}
-async function tdSeries(sym,interval,size){
-  const j=await fetchJSON(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${interval}&outputsize=${size}&order=asc&apikey=${CONFIG.TD_KEY}`);
-  if(!j.values)throw new Error('td');
-  return{t:j.values.map(x=>new Date(x.datetime.replace(' ','T')+'Z').getTime()),c:j.values.map(x=>+x.close)};
-}
+async function bTicker(){const j=await fetchJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT',5000);return{price:+j.lastPrice,prev:+j.openPrice}}
+async function paxgTicker(){const j=await fetchJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT',5000);return{price:+j.lastPrice,prev:+j.openPrice}}
+async function cbPrice(pair){const j=await fetchJSON(`https://api.coinbase.com/v2/prices/${pair}/spot`,5000);const p=+j.data.amount;if(!p)throw new Error('cb');return p}
+async function cgPrice(id){const j=await fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true`,6000);const o=j[id];if(!o||!o.usd)throw new Error('cg');return{p:o.usd,pc:o.usd/(1+(o.usd_24h_change||0)/100)}}
 let FRANK=null,FRANK_AT=0;
 async function frankForex(){
   if(FRANK&&Date.now()-FRANK_AT<600000)return FRANK;
@@ -341,6 +336,34 @@ async function frankSeries(id,days){
   const t=[],c=[];
   Object.keys(j.rates).sort().forEach(d=>{t.push(new Date(d+'T00:00:00Z').getTime());c.push(j.rates[d][M[1]])});
   return{t,c};
+}
+/* ---- منابع ایرانی (بدون VPN) ---- */
+async function nobitexBtc(){
+  const j=await fetchJSON('https://api.nobitex.ir/market/stats?srcCurrency=btc&dstCurrency=usdt',8000);
+  const s=j&&j.stats&&j.stats['btc-usdt'];
+  const p=+((s&&s.latest)||(s&&s.dayClose)||0);
+  if(!p)throw new Error('nobitex');
+  const dc=+((s&&s.dayChange)||0);
+  return{p,pc:dc?p/(1+dc/100):null};
+}
+async function wallexBtc(){
+  const j=await fetchJSON('https://api.wallex.ir/v1/markets',8000);
+  const s=((j&&j.result&&j.result.markets&&j.result.markets.BTCUSDT)||{}).stats||{};
+  const p=+(s.lastPrice||s.price||0);
+  if(!p)throw new Error('wallex');
+  return{p,pc:null};
+}
+async function wallexGold(){
+  const j=await fetchJSON('https://api.wallex.ir/v1/markets',8000);
+  const M=(j&&j.result&&j.result.markets)||{};
+  const g=(M.PAXGUSDT||M.PAXGT||{}).stats||{};
+  const pg=+(g.lastPrice||g.price||0);
+  if(!pg)throw new Error('wallex-gold');
+  if(M.PAXGUSDT)return{p:pg,pc:null};
+  const u=(M.USDTTMN||M.USDTIRT||{}).stats||{};
+  const us=+(u.lastPrice||u.price||0);
+  if(!us)throw new Error('wallex-gold');
+  return{p:pg/us,pc:null};
 }
 
 /* ================== اندیکاتورها ================== */
@@ -428,7 +451,7 @@ function setReal(id,price,prev,src){
 }
 
 /* ================== GitHub Actions (منبع اصلی) ================== */
-let GA_AT=0;
+let GA_AT=0,GA_FAILS=0;
 function gaFresh(id){const G=DATA.ga&&DATA.ga.inst&&DATA.ga.inst[id];return !!(G&&G.p&&Date.now()-(DATA.ga.ts||0)<1200000)}
 async function loadActions(){
   if(!CONFIG.PRICES_URL)return;
@@ -436,8 +459,8 @@ async function loadActions(){
   GA_AT=Date.now();
   try{
     const j=await fetchJSON(CONFIG.PRICES_URL+'?t='+Math.floor(Date.now()/60000),10000);
-    if(!j||!j.inst)return;
-    DATA.ga=j;
+    if(!j||!j.inst)throw new Error('bad json');
+    GA_FAILS=0;DATA.ga=j;
     for(const [id,o] of Object.entries(j.inst)){
       const D=DATA[id];if(!D||!o||!o.p)continue;
       if(o.s1d&&o.s1d.c&&o.s1d.c.length>30){D.hist={t:o.s1d.t,c:o.s1d.c};D.histAt=Date.now()}
@@ -448,28 +471,40 @@ async function loadActions(){
     buildSys();
     if(CUR.panel==='predict')renderPredict(PTF);
     updateStatusBadge();
-  }catch(e){}
+  }catch(e){
+    if(++GA_FAILS===3){GA_FAILS=10;toast('prices.json خوانده نشد','لینک raw را در مرورگر باز کن؛ اگر 404 داد، در تب Actions روی Run workflow بزن و مطمئن شو ریپو Public است.','med')}
+  }
 }
 
-/* ================== به‌روزرسانی‌های مستقل ================== */
+/* ================== به‌روزرسانی مستقل هر نماد ================== */
 async function refreshCrypto(id){
   if(id!=='btc')return;
-  try{const tk=await bTicker();setReal(id,tk.price,tk.prev,'live');return}catch(e){}
-  try{const p=await cbPrice('BTC-USD');setReal(id,p,null,'cb');return}catch(e){}
-  try{const g=await cgPrice('bitcoin');setReal(id,g.p,g.pc,'cg')}catch(e){}
+  const D=DATA[id];
+  const t=async()=>{try{const k=await bTicker();setReal(id,k.price,k.prev,'live');return true}catch(e){return false}};
+  const n=async()=>{try{const r=await nobitexBtc();setReal(id,r.p,r.pc,'nobitex');return true}catch(e){return false}};
+  const w=async()=>{try{const r=await wallexBtc();setReal(id,r.p,r.pc,'wallex');return true}catch(e){return false}};
+  const c=async()=>{try{const p=await cbPrice('BTC-USD');setReal(id,p,null,'cb');return true}catch(e){return false}};
+  const g=async()=>{try{const gr=await cgPrice('bitcoin');setReal(id,gr.p,gr.pc,'cg');return true}catch(e){return false}};
+  const pref=D.src==='nobitex'?n:D.src==='wallex'?w:D.src==='cb'?c:D.src==='cg'?g:null;
+  if(pref&&await pref())return;
+  for(const f of [t,n,w,c,g]){if(await f())return}
 }
 async function refreshMetal(){
   const D=DATA.gold;
   if(CONFIG.PRICES_URL&&D.src==='ga'&&Date.now()-(D.lastOk||0)<1200000)return;
-  try{const tk=await paxgTicker();setReal('gold',tk.price,tk.prev,'paxg');return}catch(e){}
-  try{const p=await cbPrice('PAXG-USD');setReal('gold',p,null,'paxg');return}catch(e){}
-  try{const g=await cgPrice('pax-gold');setReal('gold',g.p,g.pc,'paxg')}catch(e){}
+  const p=async()=>{try{const k=await paxgTicker();setReal('gold',k.price,k.prev,'paxg');return true}catch(e){return false}};
+  const w=async()=>{try{const r=await wallexGold();setReal('gold',r.p,r.pc,'paxg');return true}catch(e){return false}};
+  const g=async()=>{try{const gr=await cgPrice('pax-gold');setReal('gold',gr.p,gr.pc,'paxg');return true}catch(e){return false}};
+  if(D.src==='paxg'&&await p())return;
+  if(await p())return;
+  if(await w())return;
+  await g();
 }
 async function refreshFxBackup(){
   for(const id of ['eurusd','gbpusd','usdjpy']){
     if(gaFresh(id)||Date.now()-(DATA[id].lastOk||0)<1800000)continue;
     try{const f=await frankForex();const o=f[id];if(o)setReal(id,o.p,o.prev,'frank')}
-    catch(e){try{const f2=await (async()=>{const j=await fetchJSON('https://open.er-api.com/v6/latest/USD');return{[id]:{p:1/j.rates[{eurusd:'EUR',gbpusd:'GBP',usdjpy:'JPY'}[id]],prev:null}}})();const o2=f2[id];if(o2)setReal(id,o2.p,null,'erapi')}catch(e2){}}
+    catch(e){try{const j=await fetchJSON('https://open.er-api.com/v6/latest/USD',6000);const k={eurusd:'EUR',gbpusd:'GBP',usdjpy:'JPY'}[id];if(j.rates&&j.rates[k])setReal(id,1/j.rates[k],null,'erapi')}catch(e2){}}
     await sleep(400);
   }
 }
@@ -508,49 +543,6 @@ async function histAll(){
   buildSys();
   if(CUR.panel==='predict')renderPredict(PTF);
 }
-  /* ---- منابع ایرانی (بدون VPN) ---- */
-async function nobitexBtc(){
-  const j=await fetchJSON('https://api.nobitex.ir/market/stats?srcCurrency=btc&dstCurrency=usdt',8000);
-  const s=j&&j.stats&&j.stats['btc-usdt'];
-  const p=+((s&&s.latest)||(s&&s.dayClose)||0);
-  if(!p)throw new Error('nobitex');
-  const dc=+((s&&s.dayChange)||0);
-  return{p,pc:dc?p/(1+dc/100):null};
-}
-async function wallexBtc(){
-  const j=await fetchJSON('https://api.wallex.ir/v1/markets',8000);
-  const s=((j&&j.result&&j.result.markets&&j.result.markets.BTCUSDT)||{}).stats||{};
-  const p=+(s.lastPrice||s.price||0);
-  if(!p)throw new Error('wallex');
-  return{p,pc:null};
-}
-async function wallexGold(){
-  const j=await fetchJSON('https://api.wallex.ir/v1/markets',8000);
-  const M=(j&&j.result&&j.result.markets)||{};
-  const g=(M.PAXGUSDT||M.PAXGT||{}).stats||{};
-  const pg=+(g.lastPrice||g.price||0);
-  if(!pg)throw new Error('wallex-gold');
-  if(M.PAXGUSDT)return{p:pg,pc:null};
-  const u=(M.USDTTMN||M.USDTIRT||{}).stats||{};
-  const us=+(u.lastPrice||u.price||0);
-  if(!us)throw new Error('wallex-gold');
-  return{p:pg/us,pc:null};
-}
-async function refreshCrypto(id){
-  if(id!=='btc')return;
-  try{const tk=await bTicker();setReal(id,tk.price,tk.prev,'live');return}catch(e){}
-  try{const r=await nobitexBtc();setReal(id,r.p,r.pc,'nobitex');return}catch(e){}
-  try{const r=await wallexBtc();setReal(id,r.p,r.pc,'wallex');return}catch(e){}
-  try{const p=await cbPrice('BTC-USD');setReal(id,p,null,'cb');return}catch(e){}
-  try{const g=await cgPrice('bitcoin');setReal(id,g.p,g.pc,'cg')}catch(e){}
-}
-async function refreshMetal(){
-  const D=DATA.gold;
-  if(CONFIG.PRICES_URL&&D.src==='ga'&&Date.now()-(D.lastOk||0)<1200000)return;
-  try{const tk=await paxgTicker();setReal('gold',tk.price,tk.prev,'paxg');return}catch(e){}
-  try{const r=await wallexGold();setReal('gold',r.p,r.pc,'paxg');return}catch(e){}
-  try{const g=await cgPrice('pax-gold');setReal('gold',g.p,g.pc,'paxg')}catch(e){}
-}
 
 /* ================== بازار ================== */
 function renderMarket(){
@@ -565,7 +557,8 @@ function renderMarket(){
 function updateCard(id,quiet){
   const i=byId(id),el=document.getElementById('card-'+id);if(!el)return;
   const de=document.getElementById('dot-'+id);
-if(de){const s=DATA[id].src;de.className='dot '+((s==='live'||s==='wallex'||s==='nobitex')?'dot-live':(s&&s!=='sim'&&s!=='cache')?'dot-y':'dot-sim');de.title=SRCTITLE[s]||''}  const pe=document.getElementById('price-'+id),np=fmt(i.price,i.dec);
+  if(de){const s=DATA[id].src;de.className='dot '+((s==='live'||s==='wallex'||s==='nobitex')?'dot-live':(s&&s!=='sim'&&s!=='cache')?'dot-y':'dot-sim');de.title=(SRCTITLE[s]||'')+(DATA[id].lastOk?' · '+ago(DATA[id].lastOk):'')}
+  const pe=document.getElementById('price-'+id),np=fmt(i.price,i.dec);
   if(!quiet&&pe.textContent!==np){pe.classList.remove('fl-up','fl-down');void pe.offsetWidth;pe.classList.add(i.price>=(i.prevP??i.price)?'fl-up':'fl-down')}
   i.prevP=i.price;pe.textContent=np;
   const up=i.change>=0,ch=document.getElementById('ch-'+id);
@@ -976,7 +969,7 @@ function showTab(tab,btn){
   if(tab==='nanalysis')renderNAnalysis();
 }
 
-/* ================== حلقه‌های مستقل ================== */
+/* ================== حلقه‌ها ================== */
 const LOCK=new Set();
 function every(ms,fn){
   const run=async()=>{if(S.paused||LOCK.has(fn))return;LOCK.add(fn);try{await fn()}catch(e){}finally{LOCK.delete(fn)}};
@@ -1065,7 +1058,6 @@ wsConnect();
 setTimeout(histAll,4000);setInterval(histAll,600000);
 loadNews();setInterval(loadNews,300000);
 loadCal();setInterval(loadCal,900000);
-setTimeout(()=>toast(CONFIG.PRICES_URL?'دادهٔ واقعی فعال شد':'یک قدم مانده!','همه‌چیز مستقل و بدون کندی کار می‌کند.'+(CONFIG.PRICES_URL?'':' برای دادهٔ کامل طلا/فارکس/سهام، GitHub Actions را فعال کن و آدرسش را در PRICES_URL بگذار.'),'info'),3000);
 </script>
 </body>
 </html>
