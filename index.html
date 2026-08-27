@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>داشبورد فارکس، طلا و کریپتو — نسخه واقعی</title>
+<style>
+:root{--bg:#0f0f12;--card:#1a1a20;--border:#2a2a35;--text:#e8e8ec;--text2:#a0a0b0;--text3:#6a6a7a;--up:#22c55e;--down:#ef4444;--warn:#f59e0b;--accent:#3b82f6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+.container{max-width:1100px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:16px;gap:10px;flex-wrap:wrap}
+h1{font-size:22px;font-weight:600}
+.sub{font-size:11px;color:var(--text3);margin-top:2px}
+.header-actions{display:flex;align-items:center;gap:8px}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--up);background:rgba(34,197,94,.1);padding:4px 12px;border-radius:20px}
+.live::before{content:"";width:6px;height:6px;background:var(--up);border-radius:50%;animation:pulse 2s infinite}
+.live.paused,.live.conn,.live.off{color:var(--warn);background:rgba(245,158,11,.1)}
+.live.paused::before,.live.conn::before{background:var(--warn);animation:none}
+.live.off{color:var(--down);background:rgba(239,68,68,.1)}
+.live.off::before{background:var(--down)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.icon-btn{background:var(--card);border:1px solid var(--border);color:var(--text2);width:34px;height:34px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.icon-btn:hover{color:var(--text);border-color:var(--text3)}
+.icon-btn.off{opacity:.45}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
+.tab{padding:10px 16px;font-size:14px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.nb{display:none;background:var(--down);color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;padding:0 5px;margin-inline-start:6px;line-height:16px;text-align:center;font-weight:600}
+.panel{display:none}
+.panel.active{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:border-color .15s}
+.card:hover{border-color:var(--text3)}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:6px}
+.card-name{font-size:14px;font-weight:500;color:var(--text2)}
+.card-symbol{font-size:12px;color:var(--text3)}
+.card-price{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;margin:4px 0}
+.fl-up{animation:flu .8s}.fl-down{animation:fld .8s}
+@keyframes flu{0%{color:var(--up)}100%{color:var(--text)}}
+@keyframes fld{0%{color:var(--down)}100%{color:var(--text)}}
+.card-change{font-size:13px;font-weight:500}
+.up{color:var(--up)}.down{color:var(--down)}
+.chart-wrap{margin-top:10px;height:56px}
+.chart-wrap svg{width:100%;height:100%;display:block}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-inline-start:6px;vertical-align:middle}
+.dot-live{background:var(--up)}.dot-y{background:var(--warn)}.dot-sim{background:var(--text3)}
+.tag{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500;white-space:nowrap}
+.tag-high{background:rgba(239,68,68,.15);color:var(--down)}
+.tag-med{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag-warn{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag-low{background:rgba(106,106,122,.15);color:var(--text2)}
+.tag-buy{background:rgba(34,197,94,.15);color:var(--up)}
+.tag-sell{background:rgba(239,68,68,.15);color:var(--down)}
+.news-item{display:flex;gap:12px;padding:12px 6px;border-bottom:1px solid var(--border);border-radius:6px}
+.news-item.fresh{background:rgba(59,130,246,.05)}
+.news-time{font-size:11px;color:var(--text3);white-space:nowrap;width:88px;padding-top:2px}
+.news-body{flex:1;min-width:0}
+.news-title{font-size:14px;font-weight:500;margin-bottom:2px}
+.news-title a{color:var(--text)}
+.news-title a:hover{color:var(--accent)}
+.news-src{font-size:12px;color:var(--text3);margin-top:2px}
+.filter-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+select.mini{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit}
+.cal-row{display:grid;grid-template-columns:95px 1fr 55px 70px 70px 65px;gap:8px;padding:10px 4px;border-bottom:1px solid var(--border);font-size:13px;align-items:center}
+.cal-head{color:var(--text3);font-size:11px;font-weight:600}
+.cal-time{color:var(--text3);font-size:11px}
+.cal-event{font-weight:500}
+.cal-curr,.cal-actual,.cal-forecast{text-align:center}
+.cal-actual{font-weight:500}
+.cal-forecast{color:var(--text2)}
+.pred-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
+.pred-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+.pred-title{font-size:14px;font-weight:500}
+.pred-bar-bg{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:8px 0}
+.pred-bar{height:100%;border-radius:3px;transition:width .6s ease}
+.pred-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);gap:8px}
+.pred-desc{font-size:13px;color:var(--text2);margin-top:8px;line-height:1.7}
+.alert-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:6px}
+.alert-form select,.alert-form input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit}
+.alert-form input{width:130px}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
+.btn:hover{filter:brightness(1.12)}
+.btn-ghost{background:var(--card);border:1px solid var(--border);color:var(--text);width:100%;margin-top:14px;padding:10px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px}
+.btn-ghost:hover{border-color:var(--text3)}
+.my-alert{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.my-alert.done{opacity:.6;border-color:rgba(34,197,94,.35)}
+.del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;font-family:inherit}
+.del:hover{color:var(--down)}
+.alert-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.alert-high{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05)}
+.alert-med{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.05)}
+.alert-info{border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.05)}
+.alert-icon{flex-shrink:0;margin-top:2px}
+.c-red{color:var(--down)}.c-amb{color:var(--warn)}.c-blu{color:var(--accent)}
+.alert-title{font-size:13px;font-weight:500;margin-bottom:2px}
+.alert-text{font-size:12px;color:var(--text2);line-height:1.5}
+.section-title{font-size:16px;font-weight:600;margin:4px 0 12px}
+.section-sub{font-size:13px;font-weight:600;color:var(--text2);margin:16px 0 8px}
+.empty{font-size:13px;color:var(--text3);padding:6px 0}
+.loading{padding:30px;text-align:center;color:var(--text3);font-size:13px}
+.back-btn{font-size:13px;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-bottom:12px}
+.back-btn:hover{color:var(--text)}
+.detail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.detail-name{font-size:24px;font-weight:600}
+.detail-symbol{font-size:13px;color:var(--text3)}
+.detail-price{font-size:32px;font-weight:600;font-variant-numeric:tabular-nums}
+.detail-change{font-size:14px;font-weight:500}
+.tf-buttons{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tf-btn{padding:5px 14px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer;color:var(--text2);font-family:inherit}
+.tf-btn.active{border-color:var(--accent);color:var(--accent);font-weight:600}
+.ch-big{height:230px;margin:6px 0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px;position:relative}
+.ch-big svg{width:100%;height:100%;display:block}
+.ch-small{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0}
+.ch-label{font-size:11px;color:var(--text3);margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+.ch-small svg{width:100%;height:70px;display:block}
+.guide{position:absolute;top:8px;bottom:8px;width:1px;background:var(--text3);opacity:0;pointer-events:none;transition:opacity .1s}
+.tip{position:absolute;top:10px;background:rgba(0,0,0,.75);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;pointer-events:none;opacity:0;white-space:nowrap;transform:translateX(-50%);z-index:2;direction:ltr}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.stat{text-align:center;padding:10px 6px;background:var(--card);border:1px solid var(--border);border-radius:8px}
+.stat-label{font-size:11px;color:var(--text3);margin-bottom:4px}
+.stat-value{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 2px;font-size:11px;color:var(--text2)}
+.legend i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-inline-end:5px;vertical-align:middle}
+.legend span{display:inline-flex;align-items:center}
+.badge-src{font-size:11px;color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px}
+#toasts{position:fixed;bottom:16px;left:16px;z-index:99;display:flex;flex-direction:column;gap:8px;max-width:330px}
+.toast{background:#1c2430;border:1px solid var(--border);border-radius:10px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45);cursor:pointer;opacity:0;transform:translateY(10px);transition:all .3s}
+.toast.show{opacity:1;transform:none}
+.t-high{border-color:rgba(239,68,68,.55);background:#2a1518}
+.t-med{border-color:rgba(245,158,11,.55);background:#2a2213}
+.t-info{border-color:rgba(59,130,246,.55);background:#14202e}
+.toast-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.toast-msg{font-size:12px;color:var(--text2)}
+.footer{font-size:11px;color:var(--text3);margin:26px 0 8px;border-top:1px solid var(--border);padding-top:12px;line-height:1.9}
+@media(max-width:640px){.stat-grid{grid-template-columns:repeat(2,1fr)}.cal-row{grid-template-columns:80px 1fr 50px 60px 60px 55px;font-size:12px}.detail-price{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div>
+    <h1>داشبورد فارکس، طلا و کریپتو</h1>
+    <div class="sub">داده واقعی · آخرین به‌روزرسانی: <span id="clock">—</span></div>
+  </div>
+  <div class="header-actions">
+    <span class="live conn" id="live-badge">در حال اتصال…</span>
+    <button class="icon-btn" id="sound-btn" title="صدای هشدارها"></button>
+    <button class="icon-btn" id="pause-btn" title="توقف / ادامه"></button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" id="tab-market" onclick="showTab('market',this)">بازار</button>
+  <button class="tab" id="tab-news" onclick="showTab('news',this)">اخبار<span class="nb" id="news-badge"></span></button>
+  <button class="tab" id="tab-na" onclick="showTab('nanalysis',this)">تحلیل اخبار</button>
+  <button class="tab" id="tab-cal" onclick="showTab('calendar',this)">تقویم</button>
+  <button class="tab" id="tab-pred" onclick="showTab('predict',this)">پیش‌بینی</button>
+  <button class="tab" id="tab-alerts" onclick="showTab('alerts',this)">آلارم‌ها</button>
+</div>
+
+<div id="panel-market" class="panel active"><div class="grid" id="market-grid"></div></div>
+
+<div id="panel-news" class="panel">
+  <div class="section-title">اخبار واقعی بازار</div>
+  <div class="filter-row">
+    <select class="mini" id="nf" onchange="NF=this.value;renderNews()">
+      <option value="all">همهٔ اخبار</option>
+      <option value="high">فقط خیلی مهم</option>
+      <option value="med">مهم و متوسط</option>
+    </select>
+    <span class="badge-src" id="news-status">در حال دریافت فیدها…</span>
+  </div>
+  <div id="news-list"><div class="loading">در حال دریافت اخبار واقعی از Google News ، FXStreet ، Investing.com و…</div></div>
+</div>
+
+<div id="panel-nanalysis" class="panel">
+  <div class="section-title">تحلیل اخبار برای هر نماد</div>
+  <div class="filter-row">
+    <select class="mini" id="na-inst" onchange="renderNAnalysis()"></select>
+  </div>
+  <div id="na-out"></div>
+</div>
+
+<div id="panel-calendar" class="panel">
+  <div class="section-title" id="cal-title">تقویم اقتصادی (ForexFactory)</div>
+  <div class="filter-row">
+    <select class="mini" id="cal-filter" onchange="CALF_MODE=this.value;renderCalendar()">
+      <option value="all">همهٔ رویدادها</option>
+      <option value="med">متوسط و مهم</option>
+      <option value="high">فقط خیلی مهم</option>
+    </select>
+    <span class="badge-src" id="cal-src">در حال دریافت…</span>
+  </div>
+  <div class="cal-row cal-head"><div>زمان</div><div>رویداد</div><div class="cal-curr">ارز</div><div class="cal-actual">قبلی</div><div class="cal-forecast">پیش‌بینی</div><div style="text-align:center">تأثیر</div></div>
+  <div id="calendar-list"><div class="loading">در حال دریافت تقویم واقعی…</div></div>
+</div>
+
+<div id="panel-predict" class="panel">
+  <div class="section-title">پیش‌بینی (تحلیل تکنیکال روی دادهٔ واقعی)</div>
+  <div class="tf-buttons" id="pred-tf"></div>
+  <div class="empty" id="pred-src" style="margin-bottom:8px"></div>
+  <div id="predict-list"></div>
+</div>
+
+<div id="panel-alerts" class="panel">
+  <div class="section-title">آلارم قیمتی</div>
+  <div class="alert-form">
+    <select id="al-inst"></select>
+    <select id="al-cond"><option value="a">بالاتر از</option><option value="b">پایین‌تر از</option></select>
+    <input id="al-price" type="number" step="any" dir="ltr" placeholder="قیمت هدف">
+    <button class="btn" onclick="addAlert()">ثبت آلارم</button>
+  </div>
+  <div class="section-sub">آلارم‌های من</div>
+  <div id="my-alerts"></div>
+  <div class="section-sub">هشدارهای سیستمی (خودکار)</div>
+  <div id="sys-alerts"></div>
+</div>
+
+<div id="panel-detail" class="panel"><div id="detail-content"></div></div>
+
+<div class="footer">منابع داده: Binance (کریپتو، زنده) · Yahoo Finance (طلا/فارکس/سهام) · اخبار: Google News ، FXStreet ، Investing.com ، ForexLive ، CoinDesk · تقویم: ForexFactory. پیش‌بینی‌ها تحلیل تکنیکال (RSI/MACD/ATR) روی دادهٔ واقعی هستند و توصیهٔ سرمایه‌گذاری نیستند.</div>
+</div>
+<div id="toasts"></div>
+
+<script>
+/* ================== تنظیمات (اینجا کلیدت را بگذار) ================== */
+const CONFIG={
+  TD_KEY:"", // ← کلید رایگان از twelvedata.com (اختیاری؛ برای طلا/فارکس رسمی‌تر)
+  PROXIES:[
+    "https://api.allorigins.win/raw?url=",
+    "https://corsproxy.io/?url=",
+    "https://api.codetabs.com/v1/proxy?quest="
+  ], // اگر Worker خودت را ساختی، آدرسش را اول این لیست بگذار
+  POLL:45000 // چرخهٔ به‌روزرسانی هر نماد (~۴۵ ثانیه)
+};
+
+/* ================== ابزارها ================== */
+const $=s=>document.querySelector(s);
+const fa=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+const fmt=(v,d)=>v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hashStr(s){let h=9;for(const c of s)h=Math.imul(h^c.charCodeAt(0),387420489);return h}
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+function ago(dt){const s=(Date.now()-dt)/1000;if(s<90)return'همین حالا';if(s<3600)return fa(Math.floor(s/60))+' دقیقه پیش';if(s<86400)return fa(Math.floor(s/3600))+' ساعت پیش';return fa(Math.floor(s/86400))+' روز پیش'}
+
+/* ================== نمادها ================== */
+const INST=[
+ {id:'gold',  name:'طلا',      symbol:'XAU/USD', ysym:'GC=F',    td:'XAU/USD', dec:2, type:'metal'},
+ {id:'eurusd',name:'EUR/USD',  symbol:'EUR/USD', ysym:'EURUSD=X',td:'EUR/USD', dec:4, type:'fx'},
+ {id:'gbpusd',name:'GBP/USD',  symbol:'GBP/USD', ysym:'GBPUSD=X',td:'GBP/USD', dec:4, type:'fx'},
+ {id:'usdjpy',name:'USD/JPY',  symbol:'USD/JPY', ysym:'USDJPY=X',td:'USD/JPY', dec:3, type:'fx'},
+ {id:'btc',   name:'بیت‌کوین', symbol:'BTC/USD', ysym:'BTC-USD', dec:2, type:'crypto'},
+ {id:'aapl',  name:'Apple',    symbol:'AAPL',    ysym:'AAPL',    dec:2, type:'stock'},
+ {id:'tsla',  name:'Tesla',    symbol:'TSLA',    ysym:'TSLA',    dec:2, type:'stock'},
+ {id:'nvda',  name:'NVIDIA',   symbol:'NVDA',    ysym:'NVDA',    dec:2, type:'stock'},
+ {id:'msft',  name:'Microsoft',symbol:'MSFT',    ysym:'MSFT',    dec:2, type:'stock'},
+];
+const byId=id=>INST.find(x=>x.id===id);
+
+/* ================== شبکه ================== */
+async function fetchJSON(url,timeout=9000){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);
+  try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error('http '+r.status);return await r.json()}
+  finally{clearTimeout(t)}
+}
+async function fetchText(url,timeout=15000){
+  let lastErr;
+  for(const p of CONFIG.PROXIES){
+    const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);
+    try{
+      const r=await fetch(p+encodeURIComponent(url),{signal:c.signal});
+      clearTimeout(t);
+      if(!r.ok)throw new Error('http '+r.status);
+      const txt=await r.text();
+      if(txt&&txt.length>10)return txt;
+      throw new Error('empty');
+    }catch(e){clearTimeout(t);lastErr=e}
+  }
+  throw lastErr||new Error('proxy failed');
+}
+async function yahoo(sym,interval,range){
+  const j=JSON.parse(await fetchText(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${interval}&range=${range}&includePrePost=false`));
+  const res=j?.chart?.result?.[0];if(!res)throw new Error('bad');
+  const st=res.timestamp||[],q=res.indicators?.quote?.[0]?.close||[];
+  const t=[],c=[];
+  for(let i=0;i<st.length;i++){const v=q[i];if(v!=null){t.push(st[i]*1000);c.push(v)}}
+  const price=res.meta?.regularMarketPrice??c[c.length-1];
+  const prev=res.meta?.chartPreviousClose??res.meta?.previousClose??null;
+  if(!price)throw new Error('noprice');
+  return{price,prev,t,c};
+}
+async function bKlines(interval,limit){
+  const k=await fetchJSON(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`);
+  return{t:k.map(x=>x[0]),c:k.map(x=>+x[4])};
+}
+async function bTicker(){
+  const j=await fetchJSON(`https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT`);
+  return{price:+j.lastPrice,prev:+j.openPrice};
+}
+async function tdPrice(sym){
+  const j=await fetchJSON(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(sym)}&apikey=${CONFIG.TD_KEY}`);
+  if(j.price)return +j.price;throw new Error(j.message||'td');
+}
+async function tdSeries(sym,interval,size){
+  const j=await fetchJSON(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${interval}&outputsize=${size}&order=asc&apikey=${CONFIG.TD_KEY}`);
+  if(!j.values)throw new Error(j.message||'td');
+  return{t:j.values.map(x=>new Date(x.datetime.replace(' ','T')+'Z').getTime()),c:j.values.map(x=>+x.close)};
+}
+
+/* ================== اندیکاتورها ================== */
+function smaAt(a,i,n){if(i<n-1)return null;let s=0;for(let j=i-n+1;j<=i;j++)s+=a[j];return s/n}
+function stdevAt(a,i,n){const m=smaAt(a,i,n);if(m==null)return null;let s=0;for(let j=i-n+1;j<=i;j++)s+=(a[j]-m)**2;return Math.sqrt(s/n)}
+function emaArr(a,n){const k=2/(n+1);let e=a[0];return a.map((v,i)=>e=i?v*k+e*(1-k):v)}
+function rsiAt(a,i,n=14){if(i<n)return null;let g=0,l=0;for(let j=i-n+1;j<=i;j++){const d=a[j]-a[j-1];d>0?g+=d:l-=d}return l===0?100:100-100/(1+(g/n)/(l/n))}
+function fullInd(c){
+  const n=c.length;
+  return{c,
+    s7:c.map((_,i)=>smaAt(c,i,7)),
+    s21:c.map((_,i)=>smaAt(c,i,21)),
+    bu:c.map((_,i)=>{const m=smaAt(c,i,20),s=stdevAt(c,i,20);return m==null?null:m+2*s}),
+    bl:c.map((_,i)=>{const m=smaAt(c,i,20),s=stdevAt(c,i,20);return m==null?null:m-2*s}),
+    rsi:c.map((_,i)=>rsiAt(c,i)),
+    line:null,sig:null,hist:null};
+}
+function macdOf(c){const e12=emaArr(c,12),e26=emaArr(c,26);const line=c.map((_,i)=>e12[i]-e26[i]);const sig=emaArr(line,9);return{line,sig,hist:line.map((v,i)=>v-sig[i])}}
+function atrOf(c,n=14){if(c.length<n+1)return null;let s=0;for(let j=c.length-n;j<c.length;j++)s+=Math.abs(c[j]-c[j-1]);return s/n}
+function srOf(c){
+  const a=c.slice(-30),last=c[c.length-1];
+  const hi=Math.max(...a),lo=Math.min(...a),P=(hi+lo+last)/3;
+  return[{v:lo,l:'کف ۳۰',t:'s'},{v:2*P-hi,l:'S1',t:'s'},{v:P,l:'پیوت',t:'p'},{v:2*P-lo,l:'R1',t:'r'},{v:hi,l:'سقف ۳۰',t:'r'}];
+}
+function analyzeSeries(c){
+  if(!c||c.length<26)return null;
+  const F=fullInd(c),n=c.length-1,M=macdOf(c);
+  const r=F.rsi[n]??50,h=M.hist[n],hp=M.hist[n-1]??h,last=c[n];
+  const s7=F.s7[n]??last,s21=F.s21[n]??last;
+  let sc=50;
+  if(last>s21)sc+=12;else sc-=12;
+  if(last>s7)sc+=8;else sc-=8;
+  if(s7>s21)sc+=10;else sc-=10;
+  if(h>0)sc+=9;else sc-=9;
+  if(h>hp)sc+=4;else sc-=4;
+  if(r>=70)sc-=6;else if(r<=30)sc+=6;else if(r>55)sc+=5;else if(r<45)sc-=5;
+  sc=Math.max(5,Math.min(95,Math.round(sc)));
+  let label,cls;
+  if(r>=70){label='اشباع خرید';cls='tag-warn'}
+  else if(r<=30){label='اشباع فروش';cls='tag-warn'}
+  else if(sc>=68){label='قوی صعودی';cls='tag-buy'}
+  else if(sc>=56){label='صعودی';cls='tag-buy'}
+  else if(sc>44){label='خنثی';cls='tag-low'}
+  else if(sc>32){label='نزولی';cls='tag-sell'}
+  else{label='قوی نزولی';cls='tag-sell'}
+  return{score:sc,label,cls,rsi:r,h,hp,sr:srOf(c),atr:atrOf(c),macd:M};
+}
+function bestSeries(id){
+  const D=DATA[id];
+  if(D.hist&&D.hist.c.length>30)return D.hist;
+  if(D.day&&D.day.c.length>30)return D.day;
+  return D.seed;
+}
+
+/* ================== وضعیت ================== */
+const S={paused:false,sound:store.get('fx_sound',true)};
+const CUR={panel:'market',id:null,tf:'5m'};
+let PTF='s',newsUnseen=0,attempts=0,wsOpen=false,NF='all',CALF_MODE='all',CALF=[],CALSRC='demo',NEWSFEED=[],lastSpark=0,lastDraw=0;
+const DATA={};
+const N_SEED=90;
+INST.forEach(i=>{
+  i.price=store.get('fx_p_'+i.id,null)||[4648,1.1644,1.3576,159.445,79394.91,313.45,345.82,209.66,496.37][INST.indexOf(i)];
+  i.change=0;i.changePct=0;
+});
+INST.forEach(i=>{
+  const rnd=mulberry32(hashStr(i.id));let p=i.price,v=0;const c=[p],t=[];
+  for(let k=1;k<N_SEED;k++){
+    v=v*0.8+(rnd()*2-1)*0.008;
+    p*=(1+v*0.5+(rnd()*2-1)*0.004);c.push(p);
+    const d=new Date();d.setDate(d.getDate()-(N_SEED-1-k));t.push(d.getTime());
+  }
+  DATA[i.id]={seed:{t,c},day:null,hist:null,view:null,src:'sim',lastOk:0,prevClose:null,histAt:0};
+  if(!i.changePct)i.changePct=(rnd()*2-1)*1.2,i.change=i.price*i.changePct/100;
+});
+
+/* ================== دریافت داده ================== */
+function setReal(id,price,prev,src){
+  const i=byId(id),D=DATA[id];
+  D.src=src;D.lastOk=Date.now();
+  i.price=price;if(prev)D.prevClose=prev;
+  const pc=D.prevClose||price;
+  i.change=price-pc;i.changePct=(price-pc)/pc*100;
+  store.set('fx_p_'+id,price);
+  updateCard(id);checkAlerts();updateStatusBadge();
+}
+async function refreshInstrument(inst){
+  const id=inst.id;attempts++;
+  if(inst.type==='crypto'){
+    const tk=await bTicker();
+    setReal(id,tk.price,tk.prev,'live');
+    try{DATA[id].day=await bKlines('5m',96)}catch(e){}
+    return;
+  }
+  if(CONFIG.TD_KEY&&inst.td){
+    try{const p=await tdPrice(inst.td);setReal(id,p,DATA[id].prevClose||p,'td');}catch(e){}
+  }
+  const y=await yahoo(inst.ysym,'5m','1d');
+  setReal(id,y.price,y.prev,'yahoo');
+  DATA[id].day={t:y.t,c:y.c};
+}
+async function loadHist(inst){
+  try{
+    if(inst.type==='crypto'){const k=await bKlines('1d',200);DATA[inst.id].hist={t:k.t,c:k.c}}
+    else{const y=await yahoo(inst.ysym,'1d','6mo');if(y.c.length>30)DATA[inst.id].hist={t:y.t,c:y.c}}
+    DATA[inst.id].histAt=Date.now();
+  }catch(e){}
+}
+
+/* ================== بازار (کارت‌ها) ================== */
+function srcDot(id){
+  const s=DATA[id].src;
+  if(s==='live'||s==='td')return'<span class="dot dot-live" title="زنده / واقعی"></span>';
+  if(s==='yahoo')return'<span class="dot dot-y" title="واقعی (به‌روزرسانی دقیقه‌ای)"></span>';
+  return'<span class="dot dot-sim" title="در انتظار دادهٔ واقعی"></span>';
+}
+function renderMarket(){
+  $('#market-grid').innerHTML=INST.map(i=>{
+    return `<div class="card" id="card-${i.id}" onclick="showDetail('${i.id}')">
+      <div class="card-header"><div><div class="card-name">${i.name}${srcDot(i.id)}</div><div class="card-symbol">${i.symbol}</div></div><span class="tag tag-low" id="tag-${i.id}">…</span></div>
+      <div class="card-price" id="price-${i.id}" dir="ltr">${fmt(i.price,i.dec)}</div>
+      <div class="card-change" id="ch-${i.id}" dir="ltr"></div>
+      <div class="chart-wrap" id="sp-${i.id}"></div></div>`;}).join('');
+  INST.forEach(i=>updateCard(i.id,true));
+}
+function updateCard(id,quiet){
+  const i=byId(id),el=document.getElementById('card-'+id);if(!el)return;
+  const pe=document.getElementById('price-'+id),np=fmt(i.price,i.dec);
+  if(!quiet&&pe.textContent!==np){pe.classList.remove('fl-up','fl-down');void pe.offsetWidth;pe.classList.add(i.price>=(i.prevP??i.price)?'fl-up':'fl-down')}
+  i.prevP=i.price;pe.textContent=np;
+  const up=i.change>=0,ch=document.getElementById('ch-'+id);
+  ch.textContent=(up?'▲ ':'▼ ')+fmt(Math.abs(i.change),i.dec)+' ('+i.changePct.toFixed(2)+'%)';
+  ch.className='card-change '+(up?'up':'down');
+  const now=Date.now();
+  if(quiet||now-lastSpark>5000){
+    lastSpark=now;
+    const ser=(DATA[id].day||DATA[id].seed);
+    document.getElementById('sp-'+id).innerHTML=sparkSVG(ser.c,up?'#22c55e':'#ef4444');
+    const a=analyzeSeries(bestSeries(id).c);
+    const tg=document.getElementById('tag-'+id);
+    if(a){tg.textContent=a.label;tg.className='tag '+a.cls}
+  }
+}
+function sparkSVG(d,color){
+  const dd=d.slice(-30),mn=Math.min(...dd),mx=Math.max(...dd),rg=mx-mn||1,w=240,h=56,pd=2;
+  let p='';dd.forEach((v,i)=>{const x=pd+(i/(dd.length-1))*(w-2*pd),y=h-pd-((v-mn)/rg)*(h-2*pd);p+=(i?'L':'M')+x.toFixed(1)+','+y.toFixed(1)});
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${p}L${w-pd},${h-pd}L${pd},${h-pd}Z" fill="${color}" opacity="0.1"/><path d="${p}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+}
+
+/* ================== اخبار (RSS واقعی) ================== */
+const FEEDS=[
+ ['https://news.google.com/rss/search?q=gold+OR+xauusd+OR+bullion&hl=en-US&gl=US&ceid=US:en','Google News'],
+ ['https://news.google.com/rss/search?q=forex+OR+dollar+OR+federal+reserve&hl=en-US&gl=US&ceid=US:en','Google News'],
+ ['https://news.google.com/rss/search?q=bitcoin+OR+crypto&hl=en-US&gl=US&ceid=US:en','Google News'],
+ ['https://news.google.com/rss/search?q=stock+market&hl=en-US&gl=US&ceid=US:en','Google News'],
+ ['https://www.fxstreet.com/rss/news','FXStreet'],
+ ['https://www.forexlive.com/feed/news','ForexLive'],
+ ['https://www.coindesk.com/arc/outboundfeeds/rss/','CoinDesk'],
+ ['https://www.investing.com/rss/news_301.rss','Investing.com'],
+ ['https://www.investing.com/rss/news_285.rss','Investing.com'],
+];
+const STRONG=['breaking','fed ','fomc','powell','rate decision','rate hike','rate cut','cpi','inflation','nfp','nonfarm','jobs report','war','crash','plunge','surge','record','emergency','default','hawkish','dovish','intervention','recession'];
+const MED=['dollar','gold','bitcoin','crypto','oil','opec','ecb','boj','treasury','yield','stocks','etf','earnings','tariff'];
+const POS=['rise','gain','rally','surge','jump','record high','beat','stronger','optimis','boost','recover','soar','climb','rebound'];
+const NEG=['fall','drop','plunge','slump','weaker','down','miss','fear','risk','selloff','sell-off','crisis','recession','warn','loss','slide','sink'];
+const IMP={high:['خیلی مهم','tag-high'],med:['مهم','tag-med'],low:['عادی','tag-low']};
+const SEN={pos:['صعودی','tag-buy'],neg:['نزولی','tag-sell'],neu:['خنثی','tag-low']};
+function scoreImp(t){const s=t.toLowerCase();let k=0;STRONG.forEach(w=>{if(s.includes(w))k+=2});MED.forEach(w=>{if(s.includes(w))k+=1});return k>=3?'high':k>=1?'med':'low'}
+function scoreSen(t){const s=' '+t.toLowerCase()+' ';let p=0,g=0;POS.forEach(w=>{if(s.includes(w))p++});NEG.forEach(w=>{if(s.includes(w))g++});return p>g?'pos':g>p?'neg':'neu'}
+function parseRSS(xml,defSrc){
+  const doc=new DOMParser().parseFromString(xml,'text/xml');const out=[];
+  for(const it of [...doc.querySelectorAll('item, entry')]){
+    const title=(it.querySelector('title')?.textContent||'').trim();
+    let link=it.querySelector('link')?.textContent?.trim()||it.querySelector('link')?.getAttribute('href')||it.querySelector('guid')?.textContent||'';
+    const pd=it.querySelector('pubDate, published, updated')?.textContent;
+    const dt=pd?new Date(pd):new Date();
+    const src=it.querySelector('source')?.textContent?.trim()||defSrc;
+    if(title&&link)out.push({title,link,dt:isNaN(dt)?new Date():dt,src});
+  }
+  return out;
+}
+async function loadNews(){
+  let all=[];
+  await Promise.all(FEEDS.map(async ([u,src])=>{
+    try{all=all.concat(parseRSS(await fetchText(u),src))}catch(e){}
+  }));
+  if(!all.length){$('#news-status').textContent='فیدها در دسترس نیست — دوباره تلاش می‌شود';return}
+  const seen=new Set();
+  NEWSFEED=all.sort((a,b)=>b.dt-a.dt).filter(x=>{const k=x.title.toLowerCase().slice(0,70);if(seen.has(k))return false;seen.add(k);return true}).slice(0,60);
+  NEWSFEED.forEach(n=>{n.imp=scoreImp(n.title);n.sen=scoreSen(n.title)});
+  $('#news-status').textContent='فیدهای زنده · '+fa(NEWSFEED.length)+' خبر';
+  renderNews();
+  if(CUR.panel==='nanalysis')renderNAnalysis();
+  if(CUR.panel!=='news'){newsUnseen=Math.min(newsUnseen+3,9);renderNewsBadge()}
+}
+function renderNewsBadge(){const b=$('#news-badge');b.style.display=newsUnseen?'inline-block':'none';b.textContent=fa(newsUnseen)}
+function renderNews(){
+  const list=NEWSFEED.filter(n=>NF==='all'||(NF==='high'&&n.imp==='high')||(NF==='med'&&n.imp!=='low'));
+  $('#news-list').innerHTML=list.length?list.slice(0,40).map(n=>`
+    <div class="news-item ${n.fresh?'fresh':''}">
+      <div class="news-time">${ago(n.dt)}</div>
+      <div class="news-body"><div class="news-title"><a href="${n.link}" target="_blank" rel="noopener" dir="auto">${n.title} ↗</a></div>
+      <div class="news-src">${n.src}</div></div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        <span class="tag ${IMP[n.imp][1]}">${IMP[n.imp][0]}</span>
+        <span class="tag ${SEN[n.sen][1]}">${SEN[n.sen][0]}</span>
+      </div></div>`).join(''):'<div class="empty">خبری با این فیلتر پیدا نشد.</div>';
+}
+
+/* ================== تحلیل اخبار ================== */
+const KW={
+ gold:[/\bgold\b/i,/xau/i,/bullion/i],
+ btc:[/bitcoin/i,/\bbtc\b/i,/crypto/i,/blockchain/i],
+ eurusd:[/eur\/usd/i,/\beuro\b/i,/\becb\b/i],
+ gbpusd:[/\bpound\b/i,/sterling/i,/\bgbp\b/i,/\bboe\b/i,/bank of england/i],
+ usdjpy:[/\byen\b/i,/\bjpy\b/i,/\bboj\b/i,/bank of japan/i],
+ aapl:[/\bapple\b/i,/iphone/i,/\baapl\b/i],
+ tsla:[/tesla/i,/elon musk/i],
+ nvda:[/nvidia/i,/\bnvda\b/i,/ semiconductor/i],
+ msft:[/microsoft/i,/\bmsft\b/i,/azure/i,/copilot/i]
+};
+const USD_KW=[/\bdollar\b/i,/\bfed\b/i,/fomc/i,/powell/i,/interest rate/i,/\bcpi\b/i,/inflation/i,/treasury/i,/yield/i];
+function matchNews(id){
+  const re=KW[id]||[];
+  return NEWSFEED.map(n=>{
+    const direct=re.some(r=>r.test(n.title));
+    const usd=!direct&&['gold','eurusd','usdjpy'].includes(id)&&USD_KW.some(r=>r.test(n.title));
+    return direct?{n,ind:''}:usd?{n,ind:' · غیرمستقیم (دلار)'}:null;
+  }).filter(Boolean);
+}
+function renderNAnalysis(){
+  const id=$('#na-inst').value||INST[0].id;
+  const items=matchNews(id),i=byId(id);
+  if(!items.length){$('#na-out').innerHTML='<div class="empty">خبر مرتبطی در فیدهای فعلی پیدا نشد — چند دقیقه بعد دوباره چک کنید.</div>';return}
+  let pos=0,neg=0;
+  items.forEach(({n})=>{if(n.sen==='pos')pos++;else if(n.sen==='neg')neg++});
+  const tot=items.length,score=tot?Math.round(50+(pos-neg)/tot*50):50;
+  const verdict=score>=60?'فشار خبری عمدتاً <b class="up">صعودی</b> است':score<=40?'فشار خبری عمدتاً <b class="down">نزولی</b> است':'فشار خبری <b>متعادل</b> است';
+  $('#na-out').innerHTML=`
+   <div class="pred-card">
+     <div class="pred-header"><span class="pred-title">${i.name} — حس خبری (${fa(tot)} خبر مرتبط)</span><span class="tag ${score>=60?'tag-buy':score<=40?'tag-sell':'tag-low'}">${fa(score)}٪ صعودی</span></div>
+     <div class="pred-bar-bg"><div class="pred-bar" style="width:${score}%;background:${score>=60?'var(--up)':score<=40?'var(--down)':'var(--warn)'}"></div></div>
+     <div class="pred-labels"><span class="down">نزولی: ${fa(neg)}</span><span class="up">صعودی: ${fa(pos)}</span></div>
+     <div class="pred-desc">${verdict}. این تحلیل بر پایهٔ کلمات کلیدی عناوین فیدهای زنده است (نه تضمین).</div>
+   </div>
+   ${items.slice(0,12).map(({n,ind})=>`
+     <div class="news-item"><div class="news-time">${ago(n.dt)}</div>
+     <div class="news-body"><div class="news-title"><a href="${n.link}" target="_blank" rel="noopener" dir="auto">${n.title} ↗</a></div>
+     <div class="news-src">${n.src}${ind}</div></div>
+     <span class="tag ${SEN[n.sen][1]}">${SEN[n.sen][0]}</span></div>`).join('')}`;
+}
+
+/* ================== تقویم (ForexFactory واقعی) ================== */
+const CAL_IMP={high:['مهم','tag-high'],medium:['متوسط','tag-med'],low:['عادی','tag-low'],holiday:['تعطیلی','tag-low']};
+async function loadCal(){
+  try{
+    const j=JSON.parse(await fetchText('https://nfs.faireconomy.media/ff_calendar_thisweek.json'));
+    CALF=j.map(x=>({t:new Date(x.date),e:x.title,c:x.country,i:(x.impact||'low').toLowerCase(),a:x.previous||'—',f:x.forecast||'—'}))
+      .filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
+    CALSRC='ff';
+  }catch(e){CALSRC='demo'}
+  renderCalendar();
+}
+function renderCalendar(){
+  $('#cal-title').textContent='تقویم اقتصادی — هفتهٔ جاری';
+  $('#cal-src').textContent=CALSRC==='ff'?'دادهٔ واقعی ForexFactory':'نمونه (اتصال برقرار نشد)';
+  let list=CALF;
+  if(CALF_MODE==='med')list=list.filter(x=>x.i==='high'||x.i==='medium');
+  if(CALF_MODE==='high')list=list.filter(x=>x.i==='high');
+  $('#calendar-list').innerHTML=list.length?list.map(x=>{
+    const im=CAL_IMP[x.i]||CAL_IMP.low;
+    return `<div class="cal-row"><div class="cal-time">${x.t.toLocaleString('fa-IR',{weekday:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    <div class="cal-event" dir="auto">${x.e}</div><div class="cal-curr">${x.c}</div>
+    <div class="cal-actual" dir="ltr">${x.a}</div><div class="cal-forecast" dir="ltr">${x.f}</div>
+    <div style="text-align:center"><span class="tag ${im[1]}">${im[0]}</span></div></div>`;}).join(''):'<div class="empty">رویدادی با این فیلتر نیست.</div>';
+}
+
+/* ================== پیش‌بینی واقعی ================== */
+const PTFs=[['s','کوتاه‌مدت · ۱–۷ روز',1.2],['m','میان‌مدت · ۲–۴ هفته',2.5],['l','بلندمدت · ۱–۳ ماه',5]];
+function renderPredict(k){
+  PTF=k;
+  $('#pred-tf').innerHTML=PTFs.map(([v,l])=>`<button class="tf-btn ${k===v?'active':''}" onclick="renderPredict('${v}')">${l}</button>`).join('');
+  const mult=PTFs.find(x=>x[0]===k)[2];
+  let realN=0;
+  $('#predict-list').innerHTML=INST.map(i=>{
+    const ser=bestSeries(i.id),a=analyzeSeries(ser.c);
+    if(DATA[i.id].hist)realN++;
+    if(!a)return'';
+    const atr=a.atr||i.price*0.01,last=i.price;
+    const bull=last+mult*atr*(0.4+a.score/100*1.2),bear=last-mult*atr*(0.4+(100-a.score)/100*1.2);
+    const trend=a.score>=56?'صعودی':a.score>44?'خنثی/نوسانی':'نزولی';
+    const rW=a.rsi>=70?'اشباع خرید':a.rsi<=30?'اشباع فروش':'نرمال';
+    const mW=a.h>0?(a.h>a.hp?'مثبت و در حال تقویت':'مثبت اما در حال تضعیف'):(a.h<a.hp?'منفی و در حال تشدید':'منفی اما در حال کاهش');
+    const src=DATA[i.id].hist?'واقعی (۶ماههٔ روزانه)':'در انتظار دیتای کامل';
+    const d=`روند ${trend} · RSI ${a.rsi.toFixed(0)} (${rW}) · MACD ${mW}. حمایت ${fmt(a.sr[1].v,i.dec)} · مقاومت ${fmt(a.sr[3].v,i.dec)}. منبع: ${src}.`;
+    const bc=a.score>=56?'var(--up)':a.score>44?'var(--warn)':'var(--down)';
+    return `<div class="pred-card"><div class="pred-header"><span class="pred-title">${i.name} <span style="color:var(--text3);font-size:12px">(${i.symbol})</span></span><span class="tag ${a.cls}">${a.label} · ${fa(a.score)}٪</span></div>
+      <div class="pred-bar-bg"><div class="pred-bar" style="width:${a.score}%;background:${bc}"></div></div>
+      <div class="pred-labels"><span dir="ltr">▼ ${fmt(bear,i.dec)}</span><span dir="ltr">▲ ${fmt(bull,i.dec)}</span></div>
+      <div class="pred-desc">${d}</div></div>`;}).join('');
+  $('#pred-src').textContent=realN?`بر پایهٔ دادهٔ واقعی روزانه — ${fa(realN)} نماد از ${fa(INST.length)} آماده`:'در حال دریافت تاریخچهٔ واقعی…';
+}
+
+/* ================== آلارم‌ها ================== */
+let alerts=(store.get('fx_alerts',[])||[]).filter(a=>byId(a.id));
+let SYS=[];
+function buildSys(){
+  SYS=[];
+  INST.forEach(i=>{
+    const a=analyzeSeries(bestSeries(i.id).c);if(!a)return;
+    if(a.rsi>=70)SYS.push({t:i.name,msg:`RSI روی ${a.rsi.toFixed(0)} — اشباع خرید، احتمال اصلاح`,lvl:'high'});
+    else if(a.rsi<=30)SYS.push({t:i.name,msg:`RSI روی ${a.rsi.toFixed(0)} — اشباع فروش، احتمال برگشت`,lvl:'info'});
+    const hi=a.sr[4].v,lo=a.sr[0].v;
+    if(i.price>=hi*0.997)SYS.push({t:i.name,msg:`چسبیده به سقف ۳۰ (${fmt(hi,i.dec)}) — شکست = ادامهٔ روند`,lvl:'med'});
+    if(i.price<=lo*1.003)SYS.push({t:i.name,msg:`چسبیده به کف ۳۰ (${fmt(lo,i.dec)}) — شکست = تداوم فروش`,lvl:'med'});
+  });
+  renderSys();
+}
+const AI='<svg class="alert-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+function renderSys(){
+  $('#sys-alerts').innerHTML=SYS.length?SYS.map(a=>`<div class="alert-card ${a.lvl==='high'?'alert-high':a.lvl==='med'?'alert-med':'alert-info'}"><span class="alert-icon ${a.lvl==='high'?'c-red':a.lvl==='med'?'c-amb':'c-blu'}">${AI}</span><div><div class="alert-title">${a.t}</div><div class="alert-text">${a.msg}</div></div></div>`).join(''):'<div class="empty">هشدار سیستمی فعلی وجود ندارد.</div>';
+}
+function renderMyAlerts(){
+  $('#my-alerts').innerHTML=alerts.length?alerts.map(a=>{
+    const i=byId(a.id);
+    return `<div class="my-alert ${a.done?'done':''}"><div>${i.name} — ${a.cond==='a'?'بالاتر از':'پایین‌تر از'} <b dir="ltr">${fmt(a.price,i.dec)}</b> ${a.done?`<span class="tag tag-buy">فعال شد</span>`:'<span class="tag tag-low">در انتظار</span>'}</div><button class="del" onclick="delAlert(${a.key})">✕</button></div>`;}).join(''):'<div class="empty">هنوز آلارمی نساخته‌اید.</div>';
+}
+function addAlert(){
+  const id=$('#al-inst').value,cond=$('#al-cond').value,price=parseFloat($('#al-price').value);
+  if(!price||price<=0){toast('خطا','قیمت هدف را درست وارد کنید.','med');return}
+  alerts.push({key:Date.now(),id,cond,price,done:false});
+  store.set('fx_alerts',alerts);renderMyAlerts();
+  toast('آلارم ثبت شد',byId(id).name+' — '+(cond==='a'?'بالاتر از':'پایین‌تر از')+' '+fmt(price,byId(id).dec),'info');
+  try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission()}catch(e){}
+}
+function delAlert(key){alerts=alerts.filter(a=>a.key!==key);store.set('fx_alerts',alerts);renderMyAlerts()}
+function checkAlerts(){
+  let ch=false;
+  alerts.forEach(a=>{
+    if(a.done)return;const i=byId(a.id);
+    if((a.cond==='a'&&i.price>=a.price)||(a.cond==='b'&&i.price<=a.price)){
+      a.done=true;ch=true;
+      const msg=`قیمت به ${fmt(i.price,i.dec)} رسید (هدف: ${fmt(a.price,i.dec)})`;
+      toast('🔔 فعال‌شدن آلارم — '+i.name,msg,'high');beep();notify('آلارم '+i.name,msg);
+    }});
+  if(ch){store.set('fx_alerts',alerts);renderMyAlerts()}
+}
+
+/* ================== اعلان / صدا ================== */
+function toast(title,msg,lvl='info'){
+  const box=$('#toasts'),d=document.createElement('div');
+  d.className='toast t-'+lvl;
+  d.innerHTML=`<div class="toast-title">${title}</div><div class="toast-msg">${msg}</div>`;
+  d.onclick=()=>d.remove();box.prepend(d);
+  requestAnimationFrame(()=>d.classList.add('show'));
+  setTimeout(()=>{d.classList.remove('show');setTimeout(()=>d.remove(),350)},7000);
+  while(box.children.length>4)box.lastChild.remove();
+}
+let actx=null;
+function beep(){
+  if(!S.sound)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    const t=actx.currentTime;
+    [0,0.18].forEach((off,k)=>{
+      const o=actx.createOscillator(),g=actx.createGain();
+      o.type='sine';o.frequency.value=k?880:660;
+      g.gain.setValueAtTime(0.0001,t+off);
+      g.gain.exponentialRampToValueAtTime(0.12,t+off+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+off+0.16);
+      o.connect(g);g.connect(actx.destination);
+      o.start(t+off);o.stop(t+off+0.2);
+    });
+  }catch(e){}
+}
+function notify(title,body){try{if('Notification' in window&&Notification.permission==='granted')new Notification(title,{body})}catch(e){}}
+
+/* ================== صفحهٔ جزئیات (تایم‌فریم واقعی ۱م/۵م/…) ================== */
+const YMAP={'1m':['1m','1d'],'5m':['5m','5d'],'15m':['15m','1mo'],'1h':['60m','3mo'],'1D':['1d','6mo'],'1W':['1wk','2y']};
+const BMAP={'1m':'1m','5m':'5m','15m':'15m','1h':'1h','1D':'1d','1W':'1w'};
+const TDMAP={'1m':'1min','5m':'5min','15m':'15min','1h':'1h','1D':'1day','1W':'1week'};
+const TF_LBL={'1m':'۱ دقیقه','5m':'۵ دقیقه','15m':'۱۵ دقیقه','1h':'۱ ساعته','1D':'روزانه','1W':'هفتگی'};
+const SRC_LBL={binance:'Binance · زنده',td:'Twelve Data · واقعی',yahoo:'Yahoo Finance · واقعی',cache:'کش (آفلاین)'};
+async function loadView(id,tf,silent){
+  if(!silent)$('#view-status').textContent='در حال دریافت تایم‌فریم '+TF_LBL[tf]+'…';
+  const inst=byId(id);let v=null;
+  try{
+    if(inst.type==='crypto'){const k=await bKlines(BMAP[tf],240);v={t:k.t,c:k.c,src:'binance'}}
+    else if(CONFIG.TD_KEY&&inst.td){const s=await tdSeries(inst.td,TDMAP[tf],240);v={t:s.t,c:s.c,src:'td'}}
+    else{const [iv,rg]=YMAP[tf];const y=await yahoo(inst.ysym,iv,rg);v={t:y.t,c:y.c,src:'yahoo'}}
+  }catch(e){}
+  if(!(v&&v.c.length>5)){
+    const base=DATA[id].day||DATA[id].hist||DATA[id].seed;
+    const c=base.c.slice(-120);const t=base.t?base.t.slice(-c.length):base.t||[];
+    v={t,c,src:'cache'};
+  }
+  if(v.c.length>300){const cut=v.c.length-300;v.c=v.c.slice(cut);v.t=v.t.slice(cut)}
+  DATA[id].view={tf,...v};
+  drawAll();renderStats();
+  $('#view-status').textContent='منبع: '+(SRC_LBL[v.src]||v.src);
+}
+function showDetail(id){
+  CUR.id=id;CUR.tf='5m';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  $('#panel-detail').classList.add('active');
+  const i=byId(id);
+  $('#detail-content').innerHTML=`
+   <div class="back-btn" onclick="showTab('market',document.getElementById('tab-market'))"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg> بازگشت به بازار</div>
+   <div class="detail-header">
+     <div><div class="detail-name">${i.name}</div><div class="detail-symbol">${i.symbol} · تحلیل تکنیکال</div></div>
+     <div style="text-align:left"><div class="detail-price" id="dt-price" dir="ltr">${fmt(i.price,i.dec)}</div><div class="detail-change" id="dt-change" dir="ltr"></div></div>
+     <span class="tag tag-low" id="dt-tag">…</span>
+   </div>
+   <div class="tf-buttons" id="dt-tf">${Object.keys(TF_LBL).map(tf=>`<button class="tf-btn ${tf==='5m'?'active':''}" data-tf="${tf}" onclick="setTf('${tf}')">${TF_LBL[tf]}</button>`).join('')}</div>
+   <div class="empty" id="view-status" style="margin-bottom:6px"></div>
+   <div class="ch-big" id="wrap-main"><div id="d-main"></div><div class="guide" id="guide"></div><div class="tip" id="tip"></div></div>
+   <div class="legend" id="dt-legend"></div>
+   <div class="ch-small"><div class="ch-label"><span>RSI (۱۴)</span><span>قرمز: ۷۰ اشباع خرید · سبز: ۳۰ اشباع فروش</span></div><div id="d-rsi"></div></div>
+   <div class="ch-small"><div class="ch-label"><span>MACD (۱۲، ۲۶، ۹)</span><span><i style="background:#3b82f6"></i>MACD · <i style="background:#f59e0b"></i>سیگنال</span></div><div id="d-macd"></div></div>
+   <div class="stat-grid" id="d-stats"></div>
+   <button class="btn-ghost" onclick="prefillAlert('${id}')">🔔 ساخت آلارم قیمت برای ${i.name}</button>`;
+  const wrap=$('#wrap-main');
+  wrap.onmousemove=e=>{
+    if(!TT)return;
+    const r=wrap.getBoundingClientRect();
+    const xView=(e.clientX-r.left)/r.width*TT.w;
+    let k=Math.round((xView-TT.pad)/(TT.w-2*TT.pad)*(TT.n-1));
+    k=Math.max(0,Math.min(TT.n-1,k));
+    const g=$('#guide'),tp=$('#tip');
+    g.style.opacity=.5;g.style.left=(TT.x(k)/TT.w*100)+'%';
+    tp.style.opacity=1;tp.style.left=(TT.x(k)/TT.w*100)+'%';
+    const dt=TT.t[k]?new Date(TT.t[k]).toLocaleString('fa-IR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+    tp.innerHTML=`<b>${fmt(TT.p[k],byId(CUR.id).dec)}</b> · ${dt}`;
+  };
+  wrap.onmouseleave=()=>{$('#guide').style.opacity=0;$('#tip').style.opacity=0};
+  loadView(id,'5m');
+}
+function setTf(tf){
+  CUR.tf=tf;
+  document.querySelectorAll('#dt-tf .tf-btn').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf));
+  loadView(CUR.id,tf);
+}
+function drawAll(){
+  const id=CUR.id,inst=byId(id),V=DATA[id].view;
+  if(!V||V.c.length<3)return;
+  const c=V.c,F=fullInd(c),M=macdOf(c);
+  const col=c[c.length-1]>=c[0]?'#22c55e':'#ef4444';
+  $('#dt-legend').innerHTML=`<span><i style="background:${col}"></i>قیمت (${TF_LBL[V.tf]})</span><span><i style="background:#f59e0b"></i>SMA ۷</span><span><i style="background:#8b5cf6"></i>SMA ۲۱</span><span><i style="background:#3b82f6"></i>باند بولینگر</span><span style="color:var(--up)">┄ حمایت</span><span style="color:var(--down)">┄ مقاومت</span>`;
+  const w=800,h=220,pad=30,n=c.length;
+  let mn=Math.min(...c.filter((_,i)=>F.bl[i]==null?true:true)),mx=Math.max(...c);
+  F.bl.forEach(v=>{if(v!=null)mn=Math.min(mn,v)});F.bu.forEach(v=>{if(v!=null)mx=Math.max(mx,v)});
+  const rg0=(mx-mn)||1;mn-=rg0*0.07;mx+=rg0*0.07;
+  const x=i=>pad+(i/(n-1))*(w-2*pad),y=v=>h-pad-((v-mn)/((mx-mn)||1))*(h-2*pad);
+  let band='';{let up='',dn='';F.bu.forEach((v,i)=>{if(v!=null)up+=(up?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)});
+    const idx=[];F.bl.forEach((v,i)=>{if(v!=null)idx.push(i)});
+    for(let k=idx.length-1;k>=0;k--)dn+='L'+x(idx[k]).toFixed(1)+','+y(F.bl[idx[k]]).toFixed(1);
+    if(up)band=`<path d="${up}${dn}Z" fill="#3b82f6" opacity="0.07"/>`;}
+  let lv='';srOf(c).filter(L=>L.v>mn&&L.v<mx).forEach(L=>{
+    const yy=y(L.v).toFixed(1),c2=L.t==='s'?'#22c55e':L.t==='r'?'#ef4444':'#a0a0b0';
+    lv+=`<line x1="${pad}" x2="${w-pad}" y1="${yy}" y2="${yy}" stroke="${c2}" stroke-width="1" stroke-dasharray="3 5" opacity="0.5"/>`});
+  let line='';c.forEach((v,i)=>{line+=(i?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)});
+  const area=`<path d="${line}L${x(n-1).toFixed(1)},${h-pad}L${x(0).toFixed(1)},${h-pad}Z" fill="${col}" opacity="0.08"/>`;
+  const pl=(arr,c2,wd)=>{let d='';arr.forEach((v,i)=>{if(v==null)return;d+=(d?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)});return d?`<path d="${d}" fill="none" stroke="${c2}" stroke-width="${wd||1.3}"/>`:''};
+  $('#d-main').innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${band}${lv}${area}<path d="${line}" fill="none" stroke="${col}" stroke-width="2"/>${pl(F.s7,'#f59e0b')}${pl(F.s21,'#8b5cf6')}</svg>`;
+  TT={w,pad,n,p:c,t:V.t||[],x};
+  drawRSI(F);drawMACD(M);
+}
+function drawRSI(F){
+  const R=F.rsi,w=800,h=80,pad=8,n=R.length;if(!n)return;
+  const x=i=>pad+(i/(n-1))*(w-2*pad),y=v=>pad+(1-v/100)*(h-2*pad);
+  let d='';R.forEach((v,i)=>{if(v==null)return;d+=(d?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)});
+  const y70=y(70).toFixed(1),y30=y(30).toFixed(1);
+  $('#d-rsi').innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+   <rect x="${pad}" y="${y70}" width="${w-2*pad}" height="${(+y30)-(+y70)}" fill="#3b82f6" opacity="0.05"/>
+   <line x1="${pad}" x2="${w-pad}" y1="${y70}" y2="${y70}" stroke="#ef4444" stroke-width="1" stroke-dasharray="3 4" opacity="0.4"/>
+   <line x1="${pad}" x2="${w-pad}" y1="${y30}" y2="${y30}" stroke="#22c55e" stroke-width="1" stroke-dasharray="3 4" opacity="0.4"/>
+   <path d="${d}" fill="none" stroke="#3b82f6" stroke-width="1.6"/></svg>`;
+}
+function drawMACD(M){
+  const H=M.hist,L=M.line,G=M.sig,w=800,h=90,pad=10,n=H.length;
+  let mn=Math.min(...H,0),mx=Math.max(...H,0);
+  const rg=(mx-mn)||1;mn-=rg*0.08;mx+=rg*0.08;
+  const x=i=>pad+(i/(n-1))*(w-2*pad),y=v=>h-pad-((v-mn)/(mx-mn))*(h-2*pad);
+  const z=y(0);
+  let bars='';const bw=Math.max(1,(w-2*pad)/n*0.55);
+  H.forEach((v,i)=>{const yv=y(v),top=Math.min(yv,z);
+    bars+=`<rect x="${(x(i)-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(Math.abs(yv-z),0.6).toFixed(1)}" fill="${v>=0?'#22c55e':'#ef4444'}" opacity="0.5"/>`});
+  const pl=(arr,c2)=>{let d='';arr.forEach((v,i)=>{d+=(i?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1)});return `<path d="${d}" fill="none" stroke="${c2}" stroke-width="1.4"/>`};
+  $('#d-macd').innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="${pad}" x2="${w-pad}" y1="${z.toFixed(1)}" y2="${z.toFixed(1)}" stroke="#6a6a7a" stroke-width="1" opacity="0.5"/>${bars}${pl(L,'#3b82f6')}${pl(G,'#f59e0b')}</svg>`;
+}
+function renderStats(){
+  const id=CUR.id,i=byId(id),V=DATA[id].view;if(!V)return;
+  const a=analyzeSeries(V.c),n=V.c.length-1;if(!a)return;
+  const M=macdOf(V.c);
+  const cell=(l,v,c2)=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-value" ${c2?`style="color:${c2}"`:''}>${v}</div></div>`;
+  $('#d-stats').innerHTML=
+    cell('سیگنال',`<span class="tag ${a.cls}">${a.label}</span>`)+
+    cell('RSI',a.rsi.toFixed(1),a.rsi>=70?'var(--down)':a.rsi<=30?'var(--up)':'')+
+    cell('MACD',M.hist[n].toFixed(4),M.hist[n]>=0?'var(--up)':'var(--down)')+
+    cell('ATR',a.atr?fmt(a.atr,i.dec):'—')+
+    cell('SMA ۷',F_s(V.c,7,i.dec))+
+    cell('SMA ۲۱',F_s(V.c,21,i.dec))+
+    cell('حمایت S1',fmt(a.sr[1].v,i.dec),'var(--up)')+
+    cell('مقاومت R1',fmt(a.sr[3].v,i.dec),'var(--down)')+
+    cell('سقف ۳۰',fmt(a.sr[4].v,i.dec))+
+    cell('کف ۳۰',fmt(a.sr[0].v,i.dec));
+}
+function F_s(c,n,d){const v=smaAt(c,c.length-1,n);return v==null?'—':fmt(v,d)}
+function renderDetailLive(){
+  const i=byId(CUR.id),a=analyzeSeries((DATA[CUR.id].view||DATA[CUR.id].seed).c),up=i.change>=0;
+  $('#dt-price').textContent=fmt(i.price,i.dec);
+  const ch=$('#dt-change');
+  ch.textContent=(up?'▲ ':'▼ ')+fmt(Math.abs(i.change),i.dec)+' ('+i.changePct.toFixed(2)+'%)';
+  ch.className='detail-change '+(up?'up':'down');
+  if(a){const tg=$('#dt-tag');tg.textContent=a.label;tg.className='tag '+a.cls}
+}
+
+/* ================== ناوبری ================== */
+function showTab(tab,btn){
+  CUR.panel=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  $('#panel-'+tab).classList.add('active');
+  if(tab==='news'){newsUnseen=0;renderNewsBadge()}
+  if(tab==='nanalysis')renderNAnalysis();
+}
+
+/* ================== حلقه‌ها ================== */
+let mi=0;
+async function marketLoop(){
+  if(!S.paused){
+    const inst=INST[mi%INST.length];mi++;
+    try{await refreshInstrument(inst);
+      if(CUR.panel==='detail'&&CUR.id===inst.id){renderDetailLive();if(Date.now()-lastDraw>25000){lastDraw=Date.now();loadView(CUR.id,CUR.tf,true)}}
+    }catch(e){}
+  }
+  setTimeout(marketLoop,Math.max(3500,CONFIG.POLL/INST.length));
+}
+async function histAll(){
+  if(S.paused)return;
+  for(const inst of INST){
+    if(!DATA[inst.id].hist||Date.now()-(DATA[inst.id].histAt||0)>600000){
+      await loadHist(inst).catch(()=>{});await sleep(600);
+    }
+  }
+  buildSys();
+  if(CUR.panel==='predict')renderPredict(PTF);
+}
+let ws=null;
+function wsConnect(){
+  try{
+    ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+    ws.onopen=()=>{wsOpen=true;updateStatusBadge()};
+    ws.onmessage=ev=>{
+      if(S.paused)return;
+      try{
+        const d=JSON.parse(ev.data),p=+d.p;if(!p)return;
+        const i=byId('btc'),pc=DATA.btc.prevClose||p;
+        i.price=p;i.change=p-pc;i.changePct=(p-pc)/pc*100;
+        DATA.btc.src='live';DATA.btc.lastOk=Date.now();
+        store.set('fx_p_btc',p);
+        updateCard('btc');checkAlerts();
+        if(CUR.panel==='detail'&&CUR.id==='btc')renderDetailLive();
+        updateStatusBadge();
+      }catch(e){}
+    };
+    ws.onclose=()=>{wsOpen=false;updateStatusBadge();setTimeout(wsConnect,5000)};
+    ws.onerror=()=>{try{ws.close()}catch(e){}};
+  }catch(e){setTimeout(wsConnect,8000)}
+}
+function updateStatusBadge(){
+  const real=INST.filter(i=>DATA[i.id].src!=='sim'&&DATA[i.id].src!=='cache'&&Date.now()-(DATA[i.id].lastOk||0)<180000).length;
+  const b=$('#live-badge');
+  if(S.paused){b.textContent='متوقف';b.className='live paused'}
+  else if(real>0||wsOpen){b.textContent='زنده (واقعی)';b.className='live'}
+  else if(attempts>5){b.textContent='اتصال ضعیف — تلاش مجدد';b.className='live conn'}
+  else{b.textContent='در حال اتصال…';b.className='live conn'}
+}
+
+/* ================== کنترل‌ها ================== */
+const IC={
+ bell:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+ bellOff:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg>',
+ pause:'<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+ play:'<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'};
+function syncHeader(){
+  $('#sound-btn').innerHTML=S.sound?IC.bell:IC.bellOff;
+  $('#sound-btn').classList.toggle('off',!S.sound);
+  $('#pause-btn').innerHTML=S.paused?IC.play:IC.pause;
+  updateStatusBadge();
+}
+ $('#sound-btn').onclick=()=>{S.sound=!S.sound;store.set('fx_sound',S.sound);syncHeader()};
+ $('#pause-btn').onclick=()=>{S.paused=!S.paused;syncHeader()};
+function prefillAlert(id){
+  $('#al-inst').value=id;$('#al-cond').value='a';$('#al-price').value=byId(id).price;
+  showTab('alerts',document.getElementById('tab-alerts'));
+}
+document.addEventListener('pointerdown',()=>{try{actx=actx||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}},{once:true});
+
+/* ================== شروع ================== */
+buildSys();
+renderMarket();
+renderNewsBadge();
+renderPredict('s');
+renderMyAlerts();
+renderSys();
+syncHeader();
+ $('#al-inst').innerHTML=INST.map(i=>`<option value="${i.id}">${i.name} — ${i.symbol}</option>`).join('');
+ $('#na-inst').innerHTML=INST.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+ $('#al-inst').onchange=()=>{$('#al-price').value=byId($('#al-inst').value).price};
+ $('#al-price').value=INST[0].price;
+setInterval(()=>{$('#clock').textContent=new Date().toLocaleTimeString('en-GB')},1000);
+marketLoop();
+wsConnect();
+histAll();setInterval(histAll,600000);
+loadNews();setInterval(loadNews,300000);
+loadCal();setInterval(loadCal,900000);
+setTimeout(()=>toast('دادهٔ واقعی فعال شد','بیت‌کوین زنده است. طلا/فارکس/سهام و اخبار از منابع واقعی می‌آیند — نقطه‌های رنگی روی کارت‌ها وضعیت منبع را نشان می‌دهند.','info'),3000);
+</script>
+</body>
+</html>
