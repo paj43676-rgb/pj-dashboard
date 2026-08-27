@@ -225,18 +225,17 @@ select.mini{background:var(--card);border:1px solid var(--border);color:var(--te
 <div class="footer">منابع داده: Binance (کریپتو، زنده) · Yahoo Finance (طلا/فارکس/سهام) · اخبار: Google News ، FXStreet ، Investing.com ، ForexLive ، CoinDesk · تقویم: ForexFactory. پیش‌بینی‌ها تحلیل تکنیکال (RSI/MACD/ATR) روی دادهٔ واقعی هستند و توصیهٔ سرمایه‌گذاری نیستند.</div>
 </div>
 <div id="toasts"></div>
-
 <script>
-/* ================== تنظیمات (اینجا کلیدت را بگذار) ================== */
+/* ================== تنظیمات ================== */
 const CONFIG={
-  TD_KEY:"", // ← کلید رایگان از twelvedata.com (اختیاری؛ برای طلا/فارکس رسمی‌تر)
+  TD_KEY:"",
   PROXIES:[
     "https://curly-band-940a.paj424476.workers.dev/?url=",
     "https://api.allorigins.win/raw?url=",
     "https://corsproxy.io/?url=",
     "https://api.codetabs.com/v1/proxy?quest="
   ],
-  POLL:45000 // چرخهٔ به‌روزرسانی هر نماد (~۴۵ ثانیه)
+  POLL:45000
 };
 
 /* ================== ابزارها ================== */
@@ -248,13 +247,14 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 function hashStr(s){let h=9;for(const c of s)h=Math.imul(h^c.charCodeAt(0),387420489);return h}
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 function ago(dt){const s=(Date.now()-dt)/1000;if(s<90)return'همین حالا';if(s<3600)return fa(Math.floor(s/60))+' دقیقه پیش';if(s<86400)return fa(Math.floor(s/3600))+' ساعت پیش';return fa(Math.floor(s/86400))+' روز پیش'}
+const SRCTITLE={live:'زنده (Binance)',paxg:'زنده · تقریبی طلا (PAXG)',frank:'واقعی · روزانه (ECB)',erapi:'واقعی · روزانه',yahoo:'واقعی (Yahoo)',td:'واقعی (Twelve Data)',cg:'واقعی (CoinGecko)',sim:'در انتظار دادهٔ واقعی'};
 
 /* ================== نمادها ================== */
 const INST=[
- {id:'gold',  name:'طلا',      symbol:'XAU/USD', ysym:'GC=F',    td:'XAU/USD', dec:2, type:'metal'},
- {id:'eurusd',name:'EUR/USD',  symbol:'EUR/USD', ysym:'EURUSD=X',td:'EUR/USD', dec:4, type:'fx'},
- {id:'gbpusd',name:'GBP/USD',  symbol:'GBP/USD', ysym:'GBPUSD=X',td:'GBP/USD', dec:4, type:'fx'},
- {id:'usdjpy',name:'USD/JPY',  symbol:'USD/JPY', ysym:'USDJPY=X',td:'USD/JPY', dec:3, type:'fx'},
+ {id:'gold',  name:'طلا',      symbol:'XAU/USD', ysym:'GC=F',    dec:2, type:'metal'},
+ {id:'eurusd',name:'EUR/USD',  symbol:'EUR/USD', ysym:'EURUSD=X',dec:4, type:'fx'},
+ {id:'gbpusd',name:'GBP/USD',  symbol:'GBP/USD', ysym:'GBPUSD=X',dec:4, type:'fx'},
+ {id:'usdjpy',name:'USD/JPY',  symbol:'USD/JPY', ysym:'USDJPY=X',dec:3, type:'fx'},
  {id:'btc',   name:'بیت‌کوین', symbol:'BTC/USD', ysym:'BTC-USD', dec:2, type:'crypto'},
  {id:'aapl',  name:'Apple',    symbol:'AAPL',    ysym:'AAPL',    dec:2, type:'stock'},
  {id:'tsla',  name:'Tesla',    symbol:'TSLA',    ysym:'TSLA',    dec:2, type:'stock'},
@@ -264,21 +264,23 @@ const INST=[
 const byId=id=>INST.find(x=>x.id===id);
 
 /* ================== شبکه ================== */
+let PROXY_BEST=0,yahooOK=false;
 async function fetchJSON(url,timeout=9000){
   const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);
   try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error('http '+r.status);return await r.json()}
   finally{clearTimeout(t)}
 }
-async function fetchText(url,timeout=15000){
+async function fetchText(url,timeout=9000){
   let lastErr;
-  for(const p of CONFIG.PROXIES){
+  const order=CONFIG.PROXIES.map((p,i)=>i).sort((a,b)=>a===PROXY_BEST?-1:b===PROXY_BEST?1:0);
+  for(const pi of order){
     const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);
     try{
-      const r=await fetch(p+encodeURIComponent(url),{signal:c.signal});
+      const r=await fetch(CONFIG.PROXIES[pi]+encodeURIComponent(url),{signal:c.signal});
       clearTimeout(t);
       if(!r.ok)throw new Error('http '+r.status);
       const txt=await r.text();
-      if(txt&&txt.length>10)return txt;
+      if(txt&&txt.length>10){PROXY_BEST=pi;return txt}
       throw new Error('empty');
     }catch(e){clearTimeout(t);lastErr=e}
   }
@@ -293,24 +295,52 @@ async function yahoo(sym,interval,range){
   const price=res.meta?.regularMarketPrice??c[c.length-1];
   const prev=res.meta?.chartPreviousClose??res.meta?.previousClose??null;
   if(!price)throw new Error('noprice');
+  yahooOK=true;
   return{price,prev,t,c};
 }
-async function bKlines(interval,limit){
-  const k=await fetchJSON(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`);
+async function bKlines(interval,limit,sym='BTCUSDT'){
+  const k=await fetchJSON(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${interval}&limit=${limit}`);
   return{t:k.map(x=>x[0]),c:k.map(x=>+x[4])};
 }
-async function bTicker(){
-  const j=await fetchJSON(`https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT`);
-  return{price:+j.lastPrice,prev:+j.openPrice};
+async function bTicker(){const j=await fetchJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');return{price:+j.lastPrice,prev:+j.openPrice}}
+async function paxgTicker(){const j=await fetchJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT');return{price:+j.lastPrice,prev:+j.openPrice}}
+async function cgBTC(){
+  const j=await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
+  const p=j.bitcoin.usd,c=j.bitcoin.usd_24h_change||0;
+  return{price:p,prev:p/(1+c/100)};
 }
-async function tdPrice(sym){
-  const j=await fetchJSON(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(sym)}&apikey=${CONFIG.TD_KEY}`);
-  if(j.price)return +j.price;throw new Error(j.message||'td');
-}
+async function tdPrice(sym){const j=await fetchJSON(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(sym)}&apikey=${CONFIG.TD_KEY}`);if(j.price)return +j.price;throw new Error(j.message||'td')}
 async function tdSeries(sym,interval,size){
   const j=await fetchJSON(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(sym)}&interval=${interval}&outputsize=${size}&order=asc&apikey=${CONFIG.TD_KEY}`);
   if(!j.values)throw new Error(j.message||'td');
   return{t:j.values.map(x=>new Date(x.datetime.replace(' ','T')+'Z').getTime()),c:j.values.map(x=>+x.close)};
+}
+
+/* ---- فارکس مستقیم (بدون پروکسی) از ECB ---- */
+let FRANK=null,FRANK_AT=0,ERAPI=null,ERAPI_AT=0;
+async function frankForex(){
+  if(FRANK&&Date.now()-FRANK_AT<600000)return FRANK;
+  const start=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
+  const j=await fetchJSON(`https://api.frankfurter.app/${start}..?from=USD&to=EUR,GBP,JPY`);
+  const ds=Object.keys(j.rates).sort();
+  const L=j.rates[ds[ds.length-1]],P=j.rates[ds[ds.length-2]]||L;
+  FRANK={eurusd:{p:1/L.EUR,prev:P.EUR?1/P.EUR:null},gbpusd:{p:1/L.GBP,prev:P.GBP?1/P.GBP:null},usdjpy:{p:L.JPY,prev:P.JPY??null}};
+  FRANK_AT=Date.now();return FRANK;
+}
+async function erapiForex(){
+  if(ERAPI&&Date.now()-ERAPI_AT<600000)return ERAPI;
+  const j=await fetchJSON('https://open.er-api.com/v6/latest/USD');
+  const r=j.rates;
+  ERAPI={eurusd:{p:1/r.EUR,prev:null},gbpusd:{p:1/r.GBP,prev:null},usdjpy:{p:r.JPY,prev:null}};
+  ERAPI_AT=Date.now();return ERAPI;
+}
+async function frankSeries(id,days){
+  const M={eurusd:['EUR','USD'],gbpusd:['GBP','USD'],usdjpy:['USD','JPY']}[id];
+  const start=new Date(Date.now()-days*86400000).toISOString().slice(0,10);
+  const j=await fetchJSON(`https://api.frankfurter.app/${start}..?from=${M[0]}&to=${M[1]}`);
+  const t=[],c=[];
+  Object.keys(j.rates).sort().forEach(d=>{t.push(new Date(d+'T00:00:00Z').getTime());c.push(j.rates[d][M[1]])});
+  return{t,c};
 }
 
 /* ================== اندیکاتورها ================== */
@@ -319,14 +349,12 @@ function stdevAt(a,i,n){const m=smaAt(a,i,n);if(m==null)return null;let s=0;for(
 function emaArr(a,n){const k=2/(n+1);let e=a[0];return a.map((v,i)=>e=i?v*k+e*(1-k):v)}
 function rsiAt(a,i,n=14){if(i<n)return null;let g=0,l=0;for(let j=i-n+1;j<=i;j++){const d=a[j]-a[j-1];d>0?g+=d:l-=d}return l===0?100:100-100/(1+(g/n)/(l/n))}
 function fullInd(c){
-  const n=c.length;
   return{c,
     s7:c.map((_,i)=>smaAt(c,i,7)),
     s21:c.map((_,i)=>smaAt(c,i,21)),
     bu:c.map((_,i)=>{const m=smaAt(c,i,20),s=stdevAt(c,i,20);return m==null?null:m+2*s}),
     bl:c.map((_,i)=>{const m=smaAt(c,i,20),s=stdevAt(c,i,20);return m==null?null:m-2*s}),
-    rsi:c.map((_,i)=>rsiAt(c,i)),
-    line:null,sig:null,hist:null};
+    rsi:c.map((_,i)=>rsiAt(c,i))};
 }
 function macdOf(c){const e12=emaArr(c,12),e26=emaArr(c,26);const line=c.map((_,i)=>e12[i]-e26[i]);const sig=emaArr(line,9);return{line,sig,hist:line.map((v,i)=>v-sig[i])}}
 function atrOf(c,n=14){if(c.length<n+1)return null;let s=0;for(let j=c.length-n;j<c.length;j++)s+=Math.abs(c[j]-c[j-1]);return s/n}
@@ -368,7 +396,7 @@ function bestSeries(id){
 /* ================== وضعیت ================== */
 const S={paused:false,sound:store.get('fx_sound',true)};
 const CUR={panel:'market',id:null,tf:'5m'};
-let PTF='s',newsUnseen=0,attempts=0,wsOpen=false,NF='all',CALF_MODE='all',CALF=[],CALSRC='demo',NEWSFEED=[],lastSpark=0,lastDraw=0;
+let PTF='s',newsUnseen=0,attempts=0,NF='all',CALF_MODE='all',CALF=[],CALSRC='demo',NEWSFEED=[],lastSpark=0,lastDraw=0;
 const DATA={};
 const N_SEED=90;
 INST.forEach(i=>{
@@ -382,49 +410,84 @@ INST.forEach(i=>{
     p*=(1+v*0.5+(rnd()*2-1)*0.004);c.push(p);
     const d=new Date();d.setDate(d.getDate()-(N_SEED-1-k));t.push(d.getTime());
   }
-  DATA[i.id]={seed:{t,c},day:null,hist:null,view:null,src:'sim',lastOk:0,prevClose:null,histAt:0};
+  DATA[i.id]={seed:{t,c},day:null,hist:null,view:null,src:'sim',lastOk:0,prevClose:null,histAt:0,dayAt:0};
   if(!i.changePct)i.changePct=(rnd()*2-1)*1.2,i.change=i.price*i.changePct/100;
 });
 
-/* ================== دریافت داده ================== */
-function setReal(id,price,prev,src){
+/* ================== ثبت دادهٔ واقعی ================== */
+function applyLive(id,p,src){
   const i=byId(id),D=DATA[id];
+  const pc=D.prevClose||p;
   D.src=src;D.lastOk=Date.now();
-  i.price=price;if(prev)D.prevClose=prev;
-  const pc=D.prevClose||price;
-  i.change=price-pc;i.changePct=(price-pc)/pc*100;
-  store.set('fx_p_'+id,price);
-  updateCard(id);checkAlerts();updateStatusBadge();
+  i.prevP=i.price;i.price=p;
+  i.change=p-pc;i.changePct=i.change/pc*100;
+  store.set('fx_p_'+id,p);
+  updateCard(id);checkAlerts();
+  if(CUR.panel==='detail'&&CUR.id===id)renderDetailLive();
+  updateStatusBadge();
+}
+function setReal(id,price,prev,src){
+  if(prev)DATA[id].prevClose=prev;
+  applyLive(id,price,src);
 }
 async function refreshInstrument(inst){
   const id=inst.id;attempts++;
   if(inst.type==='crypto'){
-    const tk=await bTicker();
-    setReal(id,tk.price,tk.prev,'live');
-    try{DATA[id].day=await bKlines('5m',96)}catch(e){}
+    if(Date.now()-(DATA[id].lastOk||0)>60000){
+      try{const tk=await bTicker();setReal(id,tk.price,tk.prev,'live')}
+      catch(e){try{const g=await cgBTC();setReal(id,g.price,g.prev,'cg')}catch(e2){}}
+    }
+    if(Date.now()-DATA[id].dayAt>300000){try{DATA[id].day=await bKlines('5m',96);DATA[id].dayAt=Date.now()}catch(e){}}
     return;
   }
-  if(CONFIG.TD_KEY&&inst.td){
-    try{const p=await tdPrice(inst.td);setReal(id,p,DATA[id].prevClose||p,'td');}catch(e){}
+  if(inst.type==='metal'){
+    const chain=yahooOK?['yahoo','paxg']:['paxg','yahoo'];
+    for(const w of chain){
+      try{
+        if(w==='yahoo'){const y=await yahoo(inst.ysym,'5m','1d');setReal(id,y.price,y.prev,'yahoo');DATA[id].day={t:y.t,c:y.c}}
+        else{const g=await paxgTicker();setReal(id,g.price,g.prev,'paxg')}
+        break;
+      }catch(e){}
+    }
+    if(Date.now()-DATA[id].dayAt>300000){try{DATA[id].day=await bKlines('5m',96,'PAXGUSDT');DATA[id].dayAt=Date.now()}catch(e){}}
+    return;
   }
-  const y=await yahoo(inst.ysym,'5m','1d');
-  setReal(id,y.price,y.prev,'yahoo');
-  DATA[id].day={t:y.t,c:y.c};
+  if(inst.type==='fx'){
+    const chain=yahooOK?['yahoo','frank','erapi']:['frank','yahoo','erapi'];
+    for(const w of chain){
+      try{
+        if(w==='yahoo'){const y=await yahoo(inst.ysym,'5m','1d');setReal(id,y.price,y.prev,'yahoo');DATA[id].day={t:y.t,c:y.c}}
+        else if(w==='frank'){const f=await frankForex();const o=f[id];if(o)setReal(id,o.p,o.prev,'frank')}
+        else{const f=await erapiForex();const o=f[id];if(o)setReal(id,o.p,null,'erapi')}
+        break;
+      }catch(e){}
+    }
+    return;
+  }
+  if(inst.type==='stock'&&!yahooOK&&Math.random()<0.7)return;
+  if(CONFIG.TD_KEY&&inst.td){try{const p=await tdPrice(inst.td);setReal(id,p,DATA[id].prevClose||p,'td')}catch(e){}}
+  try{const y=await yahoo(inst.ysym,'5m','1d');setReal(id,y.price,y.prev,'yahoo');DATA[id].day={t:y.t,c:y.c}}catch(e){}
 }
 async function loadHist(inst){
+  const id=inst.id;
   try{
-    if(inst.type==='crypto'){const k=await bKlines('1d',200);DATA[inst.id].hist={t:k.t,c:k.c}}
-    else{const y=await yahoo(inst.ysym,'1d','6mo');if(y.c.length>30)DATA[inst.id].hist={t:y.t,c:y.c}}
-    DATA[inst.id].histAt=Date.now();
+    if(inst.type==='crypto'){const k=await bKlines('1d',200);DATA[id].hist={t:k.t,c:k.c}}
+    else if(inst.type==='metal'){
+      try{const y=await yahoo(inst.ysym,'1d','6mo');if(y.c.length>30)DATA[id].hist={t:y.t,c:y.c}}
+      catch(e){try{const k=await bKlines('1d',200,'PAXGUSDT');DATA[id].hist={t:k.t,c:k.c}}catch(e2){}}
+    }
+    else if(inst.type==='fx'){
+      try{const y=await yahoo(inst.ysym,'1d','6mo');if(y.c.length>30)DATA[id].hist={t:y.t,c:y.c}}
+      catch(e){try{const s=await frankSeries(id,180);if(s.c.length>30)DATA[id].hist=s}catch(e2){}}
+    }
+    else{const y=await yahoo(inst.ysym,'1d','6mo');if(y.c.length>30)DATA[id].hist={t:y.t,c:y.c}}
+    DATA[id].histAt=Date.now();
   }catch(e){}
 }
 
-/* ================== بازار (کارت‌ها) ================== */
+/* ================== بازار ================== */
 function srcDot(id){
-  const s=DATA[id].src;
-  if(s==='live'||s==='td')return'<span class="dot dot-live" title="زنده / واقعی"></span>';
-  if(s==='yahoo')return'<span class="dot dot-y" title="واقعی (به‌روزرسانی دقیقه‌ای)"></span>';
-  return'<span class="dot dot-sim" title="در انتظار دادهٔ واقعی"></span>';
+  return `<span class="dot dot-sim" id="dot-${id}" title="در انتظار دادهٔ واقعی"></span>`;
 }
 function renderMarket(){
   $('#market-grid').innerHTML=INST.map(i=>{
@@ -437,6 +500,8 @@ function renderMarket(){
 }
 function updateCard(id,quiet){
   const i=byId(id),el=document.getElementById('card-'+id);if(!el)return;
+  const de=document.getElementById('dot-'+id);
+  if(de){const s=DATA[id].src;de.className='dot '+(s==='live'?'dot-live':s!=='sim'&&s!=='cache'?'dot-y':'dot-sim');de.title=SRCTITLE[s]||''}
   const pe=document.getElementById('price-'+id),np=fmt(i.price,i.dec);
   if(!quiet&&pe.textContent!==np){pe.classList.remove('fl-up','fl-down');void pe.offsetWidth;pe.classList.add(i.price>=(i.prevP??i.price)?'fl-up':'fl-down')}
   i.prevP=i.price;pe.textContent=np;
@@ -459,7 +524,7 @@ function sparkSVG(d,color){
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${p}L${w-pd},${h-pd}L${pd},${h-pd}Z" fill="${color}" opacity="0.1"/><path d="${p}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
 }
 
-/* ================== اخبار (RSS واقعی) ================== */
+/* ================== اخبار ================== */
 const FEEDS=[
  ['https://news.google.com/rss/search?q=gold+OR+xauusd+OR+bullion&hl=en-US&gl=US&ceid=US:en','Google News'],
  ['https://news.google.com/rss/search?q=forex+OR+dollar+OR+federal+reserve&hl=en-US&gl=US&ceid=US:en','Google News'],
@@ -562,7 +627,7 @@ function renderNAnalysis(){
      <span class="tag ${SEN[n.sen][1]}">${SEN[n.sen][0]}</span></div>`).join('')}`;
 }
 
-/* ================== تقویم (ForexFactory واقعی) ================== */
+/* ================== تقویم ================== */
 const CAL_IMP={high:['مهم','tag-high'],medium:['متوسط','tag-med'],low:['عادی','tag-low'],holiday:['تعطیلی','tag-low']};
 async function loadCal(){
   try{
@@ -587,7 +652,7 @@ function renderCalendar(){
     <div style="text-align:center"><span class="tag ${im[1]}">${im[0]}</span></div></div>`;}).join(''):'<div class="empty">رویدادی با این فیلتر نیست.</div>';
 }
 
-/* ================== پیش‌بینی واقعی ================== */
+/* ================== پیش‌بینی ================== */
 const PTFs=[['s','کوتاه‌مدت · ۱–۷ روز',1.2],['m','میان‌مدت · ۲–۴ هفته',2.5],['l','بلندمدت · ۱–۳ ماه',5]];
 function renderPredict(k){
   PTF=k;
@@ -603,7 +668,7 @@ function renderPredict(k){
     const trend=a.score>=56?'صعودی':a.score>44?'خنثی/نوسانی':'نزولی';
     const rW=a.rsi>=70?'اشباع خرید':a.rsi<=30?'اشباع فروش':'نرمال';
     const mW=a.h>0?(a.h>a.hp?'مثبت و در حال تقویت':'مثبت اما در حال تضعیف'):(a.h<a.hp?'منفی و در حال تشدید':'منفی اما در حال کاهش');
-    const src=DATA[i.id].hist?'واقعی (۶ماههٔ روزانه)':'در انتظار دیتای کامل';
+    const src=DATA[i.id].hist?'واقعی (تاریچهٔ روزانه)':'در انتظار دیتای کامل';
     const d=`روند ${trend} · RSI ${a.rsi.toFixed(0)} (${rW}) · MACD ${mW}. حمایت ${fmt(a.sr[1].v,i.dec)} · مقاومت ${fmt(a.sr[3].v,i.dec)}. منبع: ${src}.`;
     const bc=a.score>=56?'var(--up)':a.score>44?'var(--warn)':'var(--down)';
     return `<div class="pred-card"><div class="pred-header"><span class="pred-title">${i.name} <span style="color:var(--text3);font-size:12px">(${i.symbol})</span></span><span class="tag ${a.cls}">${a.label} · ${fa(a.score)}٪</span></div>
@@ -688,20 +753,27 @@ function beep(){
 }
 function notify(title,body){try{if('Notification' in window&&Notification.permission==='granted')new Notification(title,{body})}catch(e){}}
 
-/* ================== صفحهٔ جزئیات (تایم‌فریم واقعی ۱م/۵م/…) ================== */
+/* ================== جزئیات + تایم‌فریم‌ها ================== */
 const YMAP={'1m':['1m','1d'],'5m':['5m','5d'],'15m':['15m','1mo'],'1h':['60m','3mo'],'1D':['1d','6mo'],'1W':['1wk','2y']};
 const BMAP={'1m':'1m','5m':'5m','15m':'15m','1h':'1h','1D':'1d','1W':'1w'};
 const TDMAP={'1m':'1min','5m':'5min','15m':'15min','1h':'1h','1D':'1day','1W':'1week'};
 const TF_LBL={'1m':'۱ دقیقه','5m':'۵ دقیقه','15m':'۱۵ دقیقه','1h':'۱ ساعته','1D':'روزانه','1W':'هفتگی'};
-const SRC_LBL={binance:'Binance · زنده',td:'Twelve Data · واقعی',yahoo:'Yahoo Finance · واقعی',cache:'کش (آفلاین)'};
+const SRC_LBL={binance:'Binance · زنده',live:'Binance · زنده',paxg:'Binance PAXG · زنده (تقریب طلا)',td:'Twelve Data · واقعی',yahoo:'Yahoo Finance · واقعی',frank:'ECB/Frankfurter · روزانه',erapi:'ExchangeRate-API · روزانه',cg:'CoinGecko · واقعی',cache:'کش (آفلاین)'};
 async function loadView(id,tf,silent){
   if(!silent)$('#view-status').textContent='در حال دریافت تایم‌فریم '+TF_LBL[tf]+'…';
   const inst=byId(id);let v=null;
-  try{
-    if(inst.type==='crypto'){const k=await bKlines(BMAP[tf],240);v={t:k.t,c:k.c,src:'binance'}}
-    else if(CONFIG.TD_KEY&&inst.td){const s=await tdSeries(inst.td,TDMAP[tf],240);v={t:s.t,c:s.c,src:'td'}}
-    else{const [iv,rg]=YMAP[tf];const y=await yahoo(inst.ysym,iv,rg);v={t:y.t,c:y.c,src:'yahoo'}}
-  }catch(e){}
+  const tries=[];
+  if(inst.type==='crypto'){
+    tries.push(()=>bKlines(BMAP[tf],240).then(k=>({t:k.t,c:k.c,src:'binance'})));
+  }else{
+    if(CONFIG.TD_KEY&&inst.td)tries.push(()=>tdSeries(inst.td,TDMAP[tf],240).then(s=>({t:s.t,c:s.c,src:'td'})));
+    const y=()=>yahoo(inst.ysym,YMAP[tf][0],YMAP[tf][1]).then(r=>({t:r.t,c:r.c,src:'yahoo'}));
+    if(yahooOK)tries.push(y);
+    if(inst.type==='metal')tries.push(()=>bKlines(BMAP[tf],240,'PAXGUSDT').then(k=>({t:k.t,c:k.c,src:'paxg'})));
+    if(inst.type==='fx'&&(tf==='1D'||tf==='1W'))tries.push(()=>frankSeries(id,tf==='1W'?730:200).then(s=>({t:s.t,c:s.c,src:'frank'})));
+    if(!yahooOK)tries.push(y);
+  }
+  for(const t of tries){try{v=await t();if(v&&v.c.length>5)break}catch(e){}}
   if(!(v&&v.c.length>5)){
     const base=DATA[id].day||DATA[id].hist||DATA[id].seed;
     const c=base.c.slice(-120);const t=base.t?base.t.slice(-c.length):base.t||[];
@@ -761,7 +833,7 @@ function drawAll(){
   const col=c[c.length-1]>=c[0]?'#22c55e':'#ef4444';
   $('#dt-legend').innerHTML=`<span><i style="background:${col}"></i>قیمت (${TF_LBL[V.tf]})</span><span><i style="background:#f59e0b"></i>SMA ۷</span><span><i style="background:#8b5cf6"></i>SMA ۲۱</span><span><i style="background:#3b82f6"></i>باند بولینگر</span><span style="color:var(--up)">┄ حمایت</span><span style="color:var(--down)">┄ مقاومت</span>`;
   const w=800,h=220,pad=30,n=c.length;
-  let mn=Math.min(...c.filter((_,i)=>F.bl[i]==null?true:true)),mx=Math.max(...c);
+  let mn=Math.min(...c),mx=Math.max(...c);
   F.bl.forEach(v=>{if(v!=null)mn=Math.min(mn,v)});F.bu.forEach(v=>{if(v!=null)mx=Math.max(mx,v)});
   const rg0=(mx-mn)||1;mn-=rg0*0.07;mx+=rg0*0.07;
   const x=i=>pad+(i/(n-1))*(w-2*pad),y=v=>h-pad-((v-mn)/((mx-mn)||1))*(h-2*pad);
@@ -853,7 +925,8 @@ async function marketLoop(){
 }
 async function histAll(){
   if(S.paused)return;
-  for(const inst of INST){
+  const list=[...INST].sort((a,b)=>(a.type==='stock'?1:0)-(b.type==='stock'?1:0));
+  for(const inst of list){
     if(!DATA[inst.id].hist||Date.now()-(DATA[inst.id].histAt||0)>600000){
       await loadHist(inst).catch(()=>{});await sleep(600);
     }
@@ -861,33 +934,39 @@ async function histAll(){
   buildSys();
   if(CUR.panel==='predict')renderPredict(PTF);
 }
+function applyWs(id,p,src){
+  const i=byId(id),D=DATA[id];
+  D.src=src;D.lastOk=Date.now();
+  i.prevP=i.price;i.price=p;
+  const pc=D.prevClose||p;
+  i.change=p-pc;i.changePct=i.change/pc*100;
+  store.set('fx_p_'+id,p);
+  updateCard(id);checkAlerts();
+  if(CUR.panel==='detail'&&CUR.id===id)renderDetailLive();
+  updateStatusBadge();
+}
 let ws=null;
 function wsConnect(){
   try{
-    ws=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
-    ws.onopen=()=>{wsOpen=true;updateStatusBadge()};
+    ws=new WebSocket('wss://stream.binance.com:9443/stream?streams=btcusdt@trade/paxgusdt@trade');
     ws.onmessage=ev=>{
       if(S.paused)return;
       try{
-        const d=JSON.parse(ev.data),p=+d.p;if(!p)return;
-        const i=byId('btc'),pc=DATA.btc.prevClose||p;
-        i.price=p;i.change=p-pc;i.changePct=(p-pc)/pc*100;
-        DATA.btc.src='live';DATA.btc.lastOk=Date.now();
-        store.set('fx_p_btc',p);
-        updateCard('btc');checkAlerts();
-        if(CUR.panel==='detail'&&CUR.id==='btc')renderDetailLive();
-        updateStatusBadge();
+        const d=JSON.parse(ev.data),t=d.data||d;if(!t.p)return;
+        const s=(t.s||'').toUpperCase(),p=+t.p;if(!p)return;
+        if(s==='BTCUSDT')applyWs('btc',p,'live');
+        else if(s==='PAXGUSDT')applyWs('gold',p,'paxg');
       }catch(e){}
     };
-    ws.onclose=()=>{wsOpen=false;updateStatusBadge();setTimeout(wsConnect,5000)};
+    ws.onclose=()=>{setTimeout(wsConnect,5000)};
     ws.onerror=()=>{try{ws.close()}catch(e){}};
   }catch(e){setTimeout(wsConnect,8000)}
 }
 function updateStatusBadge(){
-  const real=INST.filter(i=>DATA[i.id].src!=='sim'&&DATA[i.id].src!=='cache'&&Date.now()-(DATA[i.id].lastOk||0)<180000).length;
+  const real=INST.filter(i=>{const s=DATA[i.id].src;return s!=='sim'&&s!=='cache'&&Date.now()-(DATA[i.id].lastOk||0)<1800000}).length;
   const b=$('#live-badge');
   if(S.paused){b.textContent='متوقف';b.className='live paused'}
-  else if(real>0||wsOpen){b.textContent='زنده (واقعی)';b.className='live'}
+  else if(real>0){b.textContent='زنده (واقعی)';b.className='live'}
   else if(attempts>5){b.textContent='اتصال ضعیف — تلاش مجدد';b.className='live conn'}
   else{b.textContent='در حال اتصال…';b.className='live conn'}
 }
@@ -930,7 +1009,7 @@ wsConnect();
 histAll();setInterval(histAll,600000);
 loadNews();setInterval(loadNews,300000);
 loadCal();setInterval(loadCal,900000);
-setTimeout(()=>toast('دادهٔ واقعی فعال شد','بیت‌کوین زنده است. طلا/فارکس/سهام و اخبار از منابع واقعی می‌آیند — نقطه‌های رنگی روی کارت‌ها وضعیت منبع را نشان می‌دهند.','info'),3000);
+setTimeout(()=>toast('نسخهٔ پایدار فعال شد','طلا و بیت‌کوین از Binance زنده می‌آیند؛ فارکس از نرخ واقعی روزانهٔ ECB. نقطهٔ هر کارت وضعیت منبع را نشان می‌دهد — روی نقطه نگه‌دار.','info'),3000);
 </script>
 </body>
 </html>
