@@ -249,7 +249,7 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 function hashStr(s){let h=9;for(const c of s)h=Math.imul(h^c.charCodeAt(0),387420489);return h}
 const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 function ago(dt){const s=(Date.now()-dt)/1000;if(s<90)return'همین حالا';if(s<3600)return fa(Math.floor(s/60))+' دقیقه پیش';if(s<86400)return fa(Math.floor(s/3600))+' ساعت پیش';return fa(Math.floor(s/86400))+' روز پیش'}
-const SRCTITLE={live:'Binance · زنده',binance:'Binance',cb:'Coinbase · واقعی',cg:'CoinGecko · واقعی',paxg:'PAXG · تقریب زندهٔ طلا',ga:'GitHub Actions · واقعی (هر ۵ دقیقه)',yahoo:'Yahoo Finance · واقعی',td:'Twelve Data · واقعی',frank:'ECB · نرخ روزانهٔ واقعی',erapi:'ExchangeRate · روزانهٔ واقعی',sim:'در انتظار دادهٔ واقعی',cache:'کش محلی'};
+const SRCTITLE={live:'Binance · زنده',binance:'Binance',cb:'Coinbase · واقعی',cg:'CoinGecko · واقعی',paxg:'PAXG · تقریب زندهٔ طلا',ga:'GitHub Actions · واقعی (هر ۵ دقیقه)',yahoo:'Yahoo Finance · واقعی',td:'Twelve Data · واقعی',frank:'ECB · نرخ روزانهٔ واقعی',erapi:'ExchangeRate · روزانهٔ واقعی',sim:'در انتظار دادهٔ واقعی',cache:'کش محلی',wallex:'Wallex · زنده (ایران)',nobitex:'Nobitex · زنده (ایران)'};
 
 /* ================== نمادها ================== */
 const INST=[
@@ -508,6 +508,49 @@ async function histAll(){
   buildSys();
   if(CUR.panel==='predict')renderPredict(PTF);
 }
+  /* ---- منابع ایرانی (بدون VPN) ---- */
+async function nobitexBtc(){
+  const j=await fetchJSON('https://api.nobitex.ir/market/stats?srcCurrency=btc&dstCurrency=usdt',8000);
+  const s=j&&j.stats&&j.stats['btc-usdt'];
+  const p=+((s&&s.latest)||(s&&s.dayClose)||0);
+  if(!p)throw new Error('nobitex');
+  const dc=+((s&&s.dayChange)||0);
+  return{p,pc:dc?p/(1+dc/100):null};
+}
+async function wallexBtc(){
+  const j=await fetchJSON('https://api.wallex.ir/v1/markets',8000);
+  const s=((j&&j.result&&j.result.markets&&j.result.markets.BTCUSDT)||{}).stats||{};
+  const p=+(s.lastPrice||s.price||0);
+  if(!p)throw new Error('wallex');
+  return{p,pc:null};
+}
+async function wallexGold(){
+  const j=await fetchJSON('https://api.wallex.ir/v1/markets',8000);
+  const M=(j&&j.result&&j.result.markets)||{};
+  const g=(M.PAXGUSDT||M.PAXGT||{}).stats||{};
+  const pg=+(g.lastPrice||g.price||0);
+  if(!pg)throw new Error('wallex-gold');
+  if(M.PAXGUSDT)return{p:pg,pc:null};
+  const u=(M.USDTTMN||M.USDTIRT||{}).stats||{};
+  const us=+(u.lastPrice||u.price||0);
+  if(!us)throw new Error('wallex-gold');
+  return{p:pg/us,pc:null};
+}
+async function refreshCrypto(id){
+  if(id!=='btc')return;
+  try{const tk=await bTicker();setReal(id,tk.price,tk.prev,'live');return}catch(e){}
+  try{const r=await nobitexBtc();setReal(id,r.p,r.pc,'nobitex');return}catch(e){}
+  try{const r=await wallexBtc();setReal(id,r.p,r.pc,'wallex');return}catch(e){}
+  try{const p=await cbPrice('BTC-USD');setReal(id,p,null,'cb');return}catch(e){}
+  try{const g=await cgPrice('bitcoin');setReal(id,g.p,g.pc,'cg')}catch(e){}
+}
+async function refreshMetal(){
+  const D=DATA.gold;
+  if(CONFIG.PRICES_URL&&D.src==='ga'&&Date.now()-(D.lastOk||0)<1200000)return;
+  try{const tk=await paxgTicker();setReal('gold',tk.price,tk.prev,'paxg');return}catch(e){}
+  try{const r=await wallexGold();setReal('gold',r.p,r.pc,'paxg');return}catch(e){}
+  try{const g=await cgPrice('pax-gold');setReal('gold',g.p,g.pc,'paxg')}catch(e){}
+}
 
 /* ================== بازار ================== */
 function renderMarket(){
@@ -522,8 +565,7 @@ function renderMarket(){
 function updateCard(id,quiet){
   const i=byId(id),el=document.getElementById('card-'+id);if(!el)return;
   const de=document.getElementById('dot-'+id);
-  if(de){const s=DATA[id].src;de.className='dot '+(s==='live'?'dot-live':s!=='sim'&&s!=='cache'?'dot-y':'dot-sim');de.title=SRCTITLE[s]||''}
-  const pe=document.getElementById('price-'+id),np=fmt(i.price,i.dec);
+if(de){const s=DATA[id].src;de.className='dot '+((s==='live'||s==='wallex'||s==='nobitex')?'dot-live':(s&&s!=='sim'&&s!=='cache')?'dot-y':'dot-sim');de.title=SRCTITLE[s]||''}  const pe=document.getElementById('price-'+id),np=fmt(i.price,i.dec);
   if(!quiet&&pe.textContent!==np){pe.classList.remove('fl-up','fl-down');void pe.offsetWidth;pe.classList.add(i.price>=(i.prevP??i.price)?'fl-up':'fl-down')}
   i.prevP=i.price;pe.textContent=np;
   const up=i.change>=0,ch=document.getElementById('ch-'+id);
@@ -778,7 +820,7 @@ function notify(title,body){try{if('Notification' in window&&Notification.permis
 const YMAP={'1m':['1m','1d'],'5m':['5m','5d'],'15m':['15m','1mo'],'1h':['60m','3mo'],'1D':['1d','6mo'],'1W':['1wk','2y']};
 const BMAP={'1m':'1m','5m':'5m','15m':'15m','1h':'1h','1D':'1d','1W':'1w'};
 const TF_LBL={'1m':'۱ دقیقه','5m':'۵ دقیقه','15m':'۱۵ دقیقه','1h':'۱ ساعته','1D':'روزانه','1W':'هفتگی'};
-const SRC_LBL={binance:'Binance · زنده',live:'Binance · زنده',paxg:'Binance PAXG · زنده (تقریب طلا)',td:'Twelve Data · واقعی',yahoo:'Yahoo Finance · واقعی',frank:'ECB/Frankfurter · روزانه',erapi:'ExchangeRate · روزانه',cg:'CoinGecko · واقعی',cb:'Coinbase · واقعی',ga:'GitHub Actions · واقعی (۵ دقیقه)',cache:'کش (آفلاین)'};
+const SRC_LBL={binance:'Binance · زنده',live:'Binance · زنده',paxg:'Binance PAXG · زنده (تقریب طلا)',td:'Twelve Data · واقعی',yahoo:'Yahoo Finance · واقعی',frank:'ECB/Frankfurter · روزانه',erapi:'ExchangeRate · روزانه',cg:'CoinGecko · واقعی',cb:'Coinbase · واقعی',ga:'GitHub Actions · واقعی (۵ دقیقه)',cache:'کش (آفلاین)',wallex:'Wallex · زنده (ایران)',nobitex:'Nobitex · زنده (ایران)'};
 async function loadView(id,tf,silent){
   if(!silent)$('#view-status').textContent='در حال دریافت تایم‌فریم '+TF_LBL[tf]+'…';
   const inst=byId(id);let v=null;
