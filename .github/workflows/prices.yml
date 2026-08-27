@@ -16,10 +16,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node fetch-prices.js
-      - name: commit
+      - name: sync with latest
         run: |
           git config user.name "price-bot"
           git config user.email "actions@users.noreply.github.com"
+          git fetch origin main
+          git reset --hard origin/main
+      - run: node fetch-prices.js
+      - name: commit and push
+        run: |
           git add data/prices.json
           git diff --cached --quiet || (git commit -m "prices update" && git push)
