@@ -60,7 +60,7 @@ async function fetchCalendar(){
   const r=await fetch("https://nfs.faireconomy.media/ff_calendar_thisweek.json",{headers:{"User-Agent":"Mozilla/5.0"}});
   if(!r.ok)throw new Error("http "+r.status);
   const j=await r.json();
-  return j.map(x=>({t:new Date(x.date).getTime(),e:x.title,c:x.country,i:(x.impact||"low").toLowerCase(),a:x.previous||"",f:x.forecast||""})).filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
+  return j.map(x=>({t:new Date(x.date).getTime(),e:x.title,c:x.country,i:(x.impact||"low").toLowerCase(),a:x.previous||"",f:x.forecast||x.estimate||"",act:x.actual||""})).filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
 }
 (async()=>{
   const out={ts:Date.now(),inst:{}};
