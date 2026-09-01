@@ -28,10 +28,17 @@ jobs:
           ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
         run: node scripts/fetch-prices.mjs
 
-      - name: Commit updated cache
+      - name: Send Telegram alerts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+          ALERT_MIN_SEVERITY: warning
+        run: node scripts/send-telegram-alerts.mjs
+
+      - name: Commit updated cache and alert state
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add data/prices.json public/data/prices.json
+          git add data/prices.json public/data/prices.json data/telegram-alert-state.json
           git diff --cached --quiet || git commit -m "chore: refresh dashboard cache"
           git push
