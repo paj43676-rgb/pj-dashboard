@@ -1,1 +1,9 @@
+name = "fx-dashboard-worker"
+main = "src/index.js"
+compatibility_date = "2026-08-28"
 
+[vars]
+APP_NAME = "FX Dashboard"
+SITE_ORIGIN = "https://paj43676-rgb.github.io/pj-dashboard"
+DASHBOARD_JSON_URL = "https://paj43676-rgb.github.io/pj-dashboard/data/prices.json"
+SESSION_DAYS = "7"
