@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '*/5 * * * *'
 
+concurrency:
+  group: update-cache-data-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -15,11 +19,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Sync branch before generation
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          git fetch origin "$BRANCH"
+          git pull --rebase origin "$BRANCH"
 
       - name: Build dashboard cache JSON
         env:
@@ -32,6 +45,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+          PRIVATE_SITE_URL: ${{ vars.PRIVATE_SITE_URL }}
           ALERT_MIN_SEVERITY: warning
         run: node scripts/send-telegram-alerts.mjs
 
@@ -40,5 +54,7 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/prices.json public/data/prices.json data/telegram-alert-state.json
-          git diff --cached --quiet || git commit -m "chore: refresh dashboard cache"
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: refresh dashboard cache"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
