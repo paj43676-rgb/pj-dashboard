@@ -6,6 +6,7 @@ const STATE_PATH = path.resolve(process.cwd(), 'data/telegram-alert-state.json')
 const MAX_ALERT_AGE_MS = 8 * 60 * 60 * 1000;
 const KEEP_STATE_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_LEVEL = process.env.ALERT_MIN_SEVERITY || 'warning';
+const PRIVATE_SITE_URL = process.env.PRIVATE_SITE_URL || process.env.WORKER_SITE_URL || '';
 const levelRank = { critical: 3, warning: 2, info: 1 };
 
 function fa(value) {
@@ -40,15 +41,42 @@ function normalizeChats(raw = '') {
     .filter(Boolean);
 }
 
-function severityLabel(level) {
+function severityMeta(level) {
   return {
-    critical: 'بحرانی',
-    warning: 'هشدار',
-    info: 'اطلاع',
-  }[level] || 'اطلاع';
+    critical: { label: 'بحرانی', emoji: '🚨' },
+    warning: { label: 'هشدار', emoji: '⚠️' },
+    info: { label: 'اطلاع', emoji: 'ℹ️' },
+  }[level] || { label: 'اطلاع', emoji: 'ℹ️' };
+}
+
+function typeLabel(type) {
+  return {
+    market: 'بازار',
+    news: 'خبر',
+    calendar: 'تقویم',
+  }[type] || 'بازار';
+}
+
+function groupBySeverity(alerts) {
+  return ['critical', 'warning', 'info']
+    .map((level) => ({ level, items: alerts.filter((alert) => alert.severity === level) }))
+    .filter((group) => group.items.length);
+}
+
+function formatAlertLine(alert, index) {
+  const sev = severityMeta(alert.severity);
+  const assets = alert.assetIds?.length ? ` | نمادها: ${alert.assetIds.join(', ')}` : '';
+  const src = alert.source ? ` | منبع: ${alert.source}` : '';
+  const when = faDateTime(alert.eventTime || alert.createdAt || Date.now());
+  return [
+    `${fa(index + 1)}) ${sev.emoji} ${typeLabel(alert.type)} | ${alert.title}`,
+    `${alert.message}`,
+    `زمان: ${when}${assets}${src}`,
+  ].join('\n');
 }
 
 function buildMessage(alerts, payload) {
+  const groups = groupBySeverity(alerts);
   const header = [
     '📡 هشدارهای جدید داشبورد',
     `بروزرسانی: ${faDateTime(payload.ts || Date.now())}`,
@@ -56,22 +84,20 @@ function buildMessage(alerts, payload) {
     '',
   ];
 
-  const lines = alerts.flatMap((alert, index) => {
-    const assetLine = alert.assetIds?.length ? `نمادها: ${alert.assetIds.join(', ')}` : null;
+  const sections = groups.flatMap((group) => {
+    const meta = severityMeta(group.level);
     return [
-      `${fa(index + 1)}) ${severityLabel(alert.severity)} | ${alert.title}`,
-      alert.message,
-      assetLine,
-      `زمان: ${faDateTime(alert.eventTime || alert.createdAt || Date.now())}`,
+      `${meta.emoji} ${meta.label}`,
+      ...group.items.map((alert, index) => formatAlertLine(alert, index)),
       '',
-    ].filter(Boolean);
+    ];
   });
 
   const footer = [
-    'لینک خصوصی سایت را از Cloudflare Worker باز کن.',
+    PRIVATE_SITE_URL ? `ورود به نسخه خصوصی: ${PRIVATE_SITE_URL}` : 'نسخه خصوصی سایت را از لینک Cloudflare Worker باز کن.',
   ];
 
-  return [...header, ...lines, ...footer].join('\n');
+  return [...header, ...sections, ...footer].join('\n');
 }
 
 async function sendTelegramMessage(token, chatId, text) {
@@ -117,7 +143,7 @@ async function main() {
       return Math.abs(now - eventTime) <= MAX_ALERT_AGE_MS;
     })
     .filter((alert) => !state.sent?.[alert.key])
-    .slice(0, 5);
+    .slice(0, 6);
 
   if (!candidates.length) {
     console.log('telegram-skip: no new qualifying alerts');
