@@ -474,6 +474,11 @@ export default function App() {
 
   const newsBadge = useMemo(() => computeNewsBadge(newsRows, newsSeen), [newsRows, newsSeen]);
   const alertsBadge = useMemo(() => alertSummary.critical + alertSummary.warning, [alertSummary]);
+  const criticalAlerts = useMemo(() => alertsRows.filter((item) => item.severity === 'critical').slice(0, 3), [alertsRows]);
+  const topSetups = useMemo(
+    () => setups.filter((entry) => entry?.setup).sort((a, b) => (b.setup.combo || 0) - (a.setup.combo || 0)).slice(0, 3),
+    [setups],
+  );
 
   const toggleFavorite = (id) => {
     setFavorites((current) =>
@@ -571,6 +576,20 @@ export default function App() {
           </div>
         ) : null}
 
+        {criticalAlerts.length ? (
+          <div className="critical-strip">
+            {criticalAlerts.map((item) => (
+              <div key={item.key} className="critical-chip">
+                <span>🚨</span>
+                <div>
+                  <b>{item.title}</b>
+                  <div>{item.message}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="tabs">
           {tabs.map(([key, label]) => (
             <button
@@ -601,6 +620,26 @@ export default function App() {
                 <span className="badge">{fa(alertSummary.critical)} هشدار بحرانی</span>
                 <span className="badge">ورژن داده: {dashboard?.meta?.version || '2.x'}</span>
               </div>
+            </div>
+
+            <div className="opportunity-grid">
+              {topSetups.map(({ item, setup, risk }) => (
+                <div key={item.id} className="opportunity-card">
+                  <div className="row-between wrap-gap">
+                    <div>
+                      <div className="pred-title">{item.name}</div>
+                      <div className="summary-meta">{item.symbol}</div>
+                    </div>
+                    <span className={`tag ${setup.side === 'buy' ? 'tag-buy' : setup.side === 'sell' ? 'tag-sell' : 'tag-low'}`}>
+                      {setup.title}
+                    </span>
+                  </div>
+                  <div className="opportunity-score">اعتماد {fa(setup.combo)}٪</div>
+                  <div className="summary-meta">ورود: {fmt(setup.entryLow, item.decimals)} — {fmt(setup.entryHigh, item.decimals)}</div>
+                  <div className="summary-meta">SL: {fmt(setup.stop, item.decimals)} | TP1: {fmt(setup.target1, item.decimals)}</div>
+                  <div className="summary-meta">{risk.text}</div>
+                </div>
+              ))}
             </div>
 
             <div className="summary-grid">
