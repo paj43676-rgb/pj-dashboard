@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { analyze, buildSetup } from './lib/analysis';
 import { ago, fa, faClock, faDateTime, fmt, stalenessText, timeUntil } from './lib/format';
-import { buildAlertFeed } from './lib/alert-feed';
+import { buildAlertFeed } from '../shared/market-intel.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const REFRESH_MS = 60 * 1000;
@@ -257,6 +257,7 @@ export default function App() {
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [clock, setClock] = useState(() => faClock(Date.now()));
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [alertSeen, setAlertSeen] = useState(() => storeGet('rfx_alert_seen', []));
   const [dashboard, setDashboard] = useState(null);
   const [state, setState] = useState({
     loading: true,
@@ -410,6 +411,10 @@ export default function App() {
     storeSet('rfx_news_seen', newsSeen);
   }, [newsSeen]);
 
+  useEffect(() => {
+    storeSet('rfx_alert_seen', alertSeen);
+  }, [alertSeen]);
+
   const visibleMarkets = useMemo(() => {
     let list = marketRows.filter((item) => {
       const q = marketQuery.trim().toLowerCase();
@@ -524,7 +529,8 @@ export default function App() {
 
   const providerRows = useMemo(() => Object.entries(dashboard?.meta?.providerStatus || {}), [dashboard]);
   const newsBadge = useMemo(() => computeNewsBadge(newsRows, newsSeen), [newsRows, newsSeen]);
-  const alertsBadge = useMemo(() => alertSummary.critical + alertSummary.warning, [alertSummary]);
+  const alertsNewCount = useMemo(() => alertsRows.filter((item) => ['critical', 'warning'].includes(item.severity) && !alertSeen.includes(item.key)).length, [alertSeen, alertsRows]);
+  const alertsBadge = useMemo(() => (alertsNewCount > 9 ? '۹+' : fa(alertsNewCount)), [alertsNewCount]);
   const criticalAlerts = useMemo(() => alertsRows.filter((item) => item.severity === 'critical').slice(0, 3), [alertsRows]);
   const topSetups = useMemo(() => setups.slice(0, 3), [setups]);
 
@@ -542,6 +548,15 @@ export default function App() {
     }, {});
   }, [marketRows]);
 
+  useEffect(() => {
+    if (!alertsRows.length) return;
+    const liveKeys = new Set(alertsRows.map((item) => item.key));
+    setAlertSeen((current) => {
+      const next = current.filter((key) => liveKeys.has(key));
+      return next.length === current.length ? current : next;
+    });
+  }, [alertsRows]);
+
   const toggleFavorite = (id) => {
     setFavorites((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
   };
@@ -551,9 +566,15 @@ export default function App() {
     setNewsSeen(keys);
   };
 
+  const markAllAlertsSeen = () => {
+    const keys = alertsRows.map((item) => item.key);
+    setAlertSeen(keys);
+  };
+
   const switchTab = (nextTab) => {
     setTab(nextTab);
     if (nextTab === 'news') markAllNewsSeen();
+    if (nextTab === 'alerts') markAllAlertsSeen();
   };
 
   const handleLogout = async () => {
@@ -636,7 +657,7 @@ export default function App() {
             <button key={key} className={`tab ${tab === key ? 'active' : ''}`} onClick={() => switchTab(key)}>
               {label}
               {key === 'news' && newsBadge !== '۰' ? <span className="nb">{newsBadge}</span> : null}
-              {key === 'alerts' && alertsBadge > 0 ? <span className="nb">{fa(alertsBadge)}</span> : null}
+              {key === 'alerts' && alertsNewCount > 0 ? <span className="nb">{alertsBadge}</span> : null}
             </button>
           ))}
         </div>
@@ -651,6 +672,7 @@ export default function App() {
               <div className="hero-actions">
                 <span className="badge">اخبار: {fa(newsRows.length)}</span>
                 <span className="badge">هشدارها: {fa(alertsRows.length)}</span>
+                <span className="badge">هشدار جدید: {fa(alertsNewCount)}</span>
                 <span className="badge">نمادها: {fa(marketRows.length)}</span>
               </div>
             </div>
@@ -739,7 +761,7 @@ export default function App() {
                   </select>
                   <label className="toggle-pill"><input type="checkbox" checked={onlyFavs} onChange={(event) => setOnlyFavs(event.target.checked)} /> فقط منتخب‌ها</label>
                 </div>
-                <div className="watchlist-meta">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)} · هشدار فعال: {fa(alertsRows.length)}</div>
+                <div className="watchlist-meta">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)} · هشدار فعال: {fa(alertsRows.length)} · هشدار جدید: {fa(alertsNewCount)}</div>
                 <div className="watchlist-list">
                   {visibleMarkets.map((item) => (
                     <button key={item.id} className={`watchlist-item ${selectedInstrument.id === item.id ? 'active' : ''}`} onClick={() => setSelectedId(item.id)}>
@@ -803,7 +825,9 @@ export default function App() {
                 <option value="oldest">قدیمی‌ترین</option>
                 <option value="critical-first">بحرانی اول</option>
               </select>
-              <span className="badge">بحرانی: {fa(alertSummary.critical)} · هشدار: {fa(alertSummary.warning)} · اطلاع: {fa(alertSummary.info)} · فعال و زمان‌دار</span>
+              <span className="badge">بحرانی: {fa(alertSummary.critical)} · هشدار: {fa(alertSummary.warning)} · اطلاع: {fa(alertSummary.info)} · جدید: {fa(alertsNewCount)}</span>
+              <button className="icon-btn wide-btn" onClick={() => setAlertSeen([])}>همه را جدید کن</button>
+              <button className="icon-btn wide-btn" onClick={markAllAlertsSeen}>همه را دیده‌شده کن</button>
             </div>
             <div className="stack-list">
               {filteredAlerts.map((item) => (
@@ -1008,7 +1032,10 @@ export default function App() {
         )}
       </div>
       {showScrollTop ? (
-        <button className="scroll-top-btn" onClick={scrollToTop} aria-label="Scroll to top">↑</button>
+        <button className="scroll-top-btn" onClick={scrollToTop} aria-label="Scroll to top">
+          <span>↑</span>
+          <small>بالا</small>
+        </button>
       ) : null}
     </div>
   );
