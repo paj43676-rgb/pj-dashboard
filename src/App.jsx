@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { analyze, buildSetup } from './lib/analysis';
 import { ago, fa, faClock, faDateTime, fmt, stalenessText, timeUntil } from './lib/format';
 import { buildAlertFeed } from '../shared/market-intel.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
-const REFRESH_MS = 60 * 1000;
+const REFRESH_MS = 30 * 1000;
 const TIMEFRAMES = [
   ['s1m', '1M'],
   ['s5', '5M'],
@@ -49,6 +49,12 @@ const tabs = [
   ['calendar', 'تقویم'],
   ['setups', 'ستاپ‌ها'],
   ['plan', 'پلن فنی'],
+];
+
+const MARKET_GROUPS = [
+  { key: 'us', title: 'آمریکا', label: 'US', ids: ['dji', 'gspc', 'ixic', 'vix'] },
+  { key: 'fx', title: 'ارزها', label: 'FX', ids: ['dxy', 'eurusd', 'gbpusd', 'usdjpy'] },
+  { key: 'alts', title: 'کالا و کریپتو', label: 'ALT', ids: ['gold', 'btc', 'rut'] },
 ];
 
 const impactMap = {
@@ -104,6 +110,8 @@ function frameToPoints(frame) {
 
 function buildChart(points, width = 760, height = 280) {
   const values = points.map((point) => point.close).filter(Number.isFinite);
+  const padX = 12;
+  const padY = 18;
   if (!values.length) {
     return {
       line: `M0,${height / 2} L${width},${height / 2}`,
@@ -113,20 +121,25 @@ function buildChart(points, width = 760, height = 280) {
       height,
       low: 0,
       high: 0,
+      coords: [],
+      padX,
+      padY,
     };
   }
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const padX = 12;
-  const padY = 18;
-  const path = points
-    .map((point, index) => {
-      const x = padX + (index / (points.length - 1 || 1)) * (width - padX * 2);
-      const y = height - padY - ((point.close - min) / range) * (height - padY * 2);
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
+  const coords = points.map((point, index) => {
+    const x = padX + (index / (points.length - 1 || 1)) * (width - padX * 2);
+    const y = height - padY - ((point.close - min) / range) * (height - padY * 2);
+    return {
+      ...point,
+      x,
+      y,
+      index,
+    };
+  });
+  const path = coords.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
   const first = values[0];
   const last = values.at(-1);
   const color = last >= first ? '#22c55e' : '#ef4444';
@@ -138,6 +151,9 @@ function buildChart(points, width = 760, height = 280) {
     height,
     low: min,
     high: max,
+    coords,
+    padX,
+    padY,
   };
 }
 
@@ -258,6 +274,8 @@ export default function App() {
   const [clock, setClock] = useState(() => faClock(Date.now()));
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [alertSeen, setAlertSeen] = useState(() => storeGet('rfx_alert_seen', []));
+  const [chartHoverIndex, setChartHoverIndex] = useState(null);
+  const chartRef = useRef(null);
   const [dashboard, setDashboard] = useState(null);
   const [state, setState] = useState({
     loading: true,
@@ -401,6 +419,9 @@ export default function App() {
   const currentValues = useMemo(() => currentSeries.map((point) => point.close), [currentSeries]);
   const currentAnalysis = useMemo(() => (currentValues.length >= 14 ? analyze(currentValues) : null), [currentValues]);
   const currentChart = useMemo(() => buildChart(currentSeries), [currentSeries]);
+  const activeChartIndex = chartHoverIndex == null ? Math.max(currentChart.coords.length - 1, 0) : chartHoverIndex;
+  const activeChartPoint = currentChart.coords[activeChartIndex] || null;
+  const activeChartPrev = activeChartIndex > 0 ? currentChart.coords[activeChartIndex - 1] : null;
 
   const newsRows = useMemo(() => (dashboard?.news || []).map(normalizeNewsItem), [dashboard]);
   const calendarRows = useMemo(() => (dashboard?.cal || []).map(normalizeCalendarItem), [dashboard]);
@@ -414,6 +435,10 @@ export default function App() {
   useEffect(() => {
     storeSet('rfx_alert_seen', alertSeen);
   }, [alertSeen]);
+
+  useEffect(() => {
+    setChartHoverIndex(null);
+  }, [selectedId, selectedFrame]);
 
   const visibleMarkets = useMemo(() => {
     let list = marketRows.filter((item) => {
@@ -548,6 +573,13 @@ export default function App() {
     }, {});
   }, [marketRows]);
 
+  const marketOverviewGroups = useMemo(() => {
+    return MARKET_GROUPS.map((group) => ({
+      ...group,
+      items: group.ids.map((id) => marketRows.find((item) => item.id === id)).filter(Boolean),
+    })).filter((group) => group.items.length);
+  }, [marketRows]);
+
   useEffect(() => {
     if (!alertsRows.length) return;
     const liveKeys = new Set(alertsRows.map((item) => item.key));
@@ -575,6 +607,25 @@ export default function App() {
     setTab(nextTab);
     if (nextTab === 'news') markAllNewsSeen();
     if (nextTab === 'alerts') markAllAlertsSeen();
+  };
+
+  const jumpToInstrument = (id) => {
+    setSelectedId(id);
+    setTab('market');
+  };
+
+  const updateChartHover = useCallback((clientX) => {
+    if (!chartRef.current || !currentChart.coords.length) return;
+    const rect = chartRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const nextIndex = Math.round(ratio * (currentChart.coords.length - 1));
+    setChartHoverIndex(nextIndex);
+  }, [currentChart.coords]);
+
+  const handleChartMouseMove = (event) => updateChartHover(event.clientX);
+  const handleChartTouchMove = (event) => {
+    const touch = event.touches?.[0];
+    if (touch) updateChartHover(touch.clientX);
   };
 
   const handleLogout = async () => {
@@ -645,12 +696,36 @@ export default function App() {
                 <span>🚨</span>
                 <div>
                   <b>{item.title}</b>
-                  <div>{item.message}</div>
+                  <div className="mixed-text">{item.message}</div>
                 </div>
               </div>
             ))}
           </div>
         ) : null}
+
+        <section className="global-market-board">
+          {marketOverviewGroups.map((group) => (
+            <div key={group.key} className="global-market-card">
+              <div className="global-market-head">
+                <span className="global-market-label ltr-text">{group.label}</span>
+                <div>{group.title}</div>
+              </div>
+              <div className="global-market-list">
+                {group.items.map((item) => (
+                  <button key={item.id} className={`global-market-chip ${selectedId === item.id ? 'active' : ''}`} onClick={() => jumpToInstrument(item.id)}>
+                    <div>
+                      <div className="global-market-symbol ltr-text">{item.symbol}</div>
+                      <div className="global-market-name mixed-text">{item.name}</div>
+                    </div>
+                    <div className={`global-market-move ltr-text ${item.change >= 0 ? 'up' : 'down'}`}>
+                      {item.change >= 0 ? '▲' : '▼'} {item.changePct.toFixed(2)}%
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
 
         <div className="tabs">
           {tabs.map(([key, label]) => (
@@ -713,10 +788,44 @@ export default function App() {
                   ))}
                 </div>
 
-                <div className="big-chart">
+                <div className="chart-hover-panel">
+                  <div>
+                    <span>Price</span>
+                    <b className="ltr-text">{activeChartPoint ? fmt(activeChartPoint.close, selectedInstrument.decimals) : '—'}</b>
+                  </div>
+                  <div>
+                    <span>Time</span>
+                    <b className="ltr-text">{activeChartPoint ? faDateTime(activeChartPoint.time) : '—'}</b>
+                  </div>
+                  <div>
+                    <span>Δ from prev</span>
+                    <b className={`ltr-text ${!activeChartPrev || activeChartPoint.close >= activeChartPrev.close ? 'up' : 'down'}`}>
+                      {activeChartPrev ? `${activeChartPoint.close >= activeChartPrev.close ? '+' : ''}${fmt(activeChartPoint.close - activeChartPrev.close, selectedInstrument.decimals)}` : '—'}
+                    </b>
+                  </div>
+                  <div>
+                    <span>Hint</span>
+                    <b className="mixed-text">موس را روی نمودار حرکت بده</b>
+                  </div>
+                </div>
+
+                <div
+                  ref={chartRef}
+                  className="big-chart interactive"
+                  onMouseMove={handleChartMouseMove}
+                  onMouseLeave={() => setChartHoverIndex(null)}
+                  onTouchMove={handleChartTouchMove}
+                  onTouchEnd={() => setChartHoverIndex(null)}
+                >
                   <svg viewBox={`0 0 ${currentChart.width} ${currentChart.height}`} preserveAspectRatio="none">
                     <path d={currentChart.fill} fill={currentChart.color} opacity="0.12" />
                     <path d={currentChart.line} fill="none" stroke={currentChart.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                    {activeChartPoint ? (
+                      <>
+                        <line x1={activeChartPoint.x} y1={14} x2={activeChartPoint.x} y2={currentChart.height - 14} stroke="rgba(148,163,184,0.45)" strokeDasharray="5 5" />
+                        <circle cx={activeChartPoint.x} cy={activeChartPoint.y} r="5.5" fill={currentChart.color} stroke="white" strokeWidth="2" />
+                      </>
+                    ) : null}
                   </svg>
                 </div>
 
@@ -831,7 +940,7 @@ export default function App() {
             </div>
             <div className="stack-list">
               {filteredAlerts.map((item) => (
-                <div key={item.key} className="alert-card">
+                <div key={item.key} className={`alert-card ${item.severity}`}>
                   <div className="row-between wrap-gap">
                     <div>
                       <div className="pred-title mixed-text">{item.title}</div>
@@ -1040,3 +1149,4 @@ export default function App() {
     </div>
   );
 }
+
