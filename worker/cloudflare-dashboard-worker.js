@@ -393,7 +393,7 @@ async function handleSiteRequest(request, env, url) {
     return html(renderInfoPage('SITE_ORIGIN نباید با خود Worker یکی باشد؛ وگرنه لوپ ایجاد می‌شود.'));
   }
 
-  const target = new URL(url.pathname + url.search, `${siteOrigin}/`);
+  const target = buildSiteProxyUrl(siteOrigin, url);
   const proxiedRequest = new Request(target.toString(), request);
   const response = await fetch(proxiedRequest, {
     cf: { cacheEverything: false },
@@ -404,10 +404,27 @@ async function handleSiteRequest(request, env, url) {
   return new Response(response.body, { status: response.status, headers });
 }
 
+function buildSiteProxyUrl(siteOrigin, requestUrl) {
+  const origin = new URL(siteOrigin);
+  const basePath = origin.pathname.replace(/\/$/, '');
+  let targetPath = requestUrl.pathname || '/';
+
+  if (basePath && basePath !== '/') {
+    if (targetPath === '/') {
+      targetPath = `${basePath}/`;
+    } else if (targetPath !== basePath && !targetPath.startsWith(`${basePath}/`)) {
+      targetPath = `${basePath}${targetPath.startsWith('/') ? '' : '/'}${targetPath}`;
+    }
+  }
+
+  return new URL(`${targetPath}${requestUrl.search || ''}`, origin.origin);
+}
+
 async function loadDashboardData(env) {
   const explicit = env.DASHBOARD_JSON_URL?.trim();
   const fromOrigin = env.SITE_ORIGIN?.trim() ? `${env.SITE_ORIGIN.replace(/\/$/, '')}/data/prices.json` : '';
   const target = explicit || fromOrigin;
+  const proxyMode = explicit ? 'DASHBOARD_JSON_URL' : 'SITE_ORIGIN';
   if (!target) throw new Error('DASHBOARD_JSON_URL or SITE_ORIGIN must be configured');
 
   const response = await fetch(target, {
@@ -416,6 +433,9 @@ async function loadDashboardData(env) {
   });
   if (!response.ok) throw new Error(`Dashboard JSON fetch failed: ${response.status}`);
   const data = await response.json();
+  data.meta = typeof data.meta === 'object' && data.meta ? data.meta : {};
+  data.meta.proxySource = target;
+  data.meta.proxyMode = proxyMode;
   if (!data.alerts || !Array.isArray(data.alerts)) {
     const generated = buildAlertFeed(data, Date.now());
     data.alerts = generated.items;
