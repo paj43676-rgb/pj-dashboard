@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { analyze, buildSetup } from './lib/analysis';
 import { ago, fa, faClock, faDateTime, fmt, stalenessText, timeUntil } from './lib/format';
-import { buildAlertFeed } from '../shared/market-intel.js';
+import { buildAlertFeed } from './lib/alert-feed';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const REFRESH_MS = 60 * 1000;
@@ -16,17 +16,17 @@ const TIMEFRAMES = [
 const SETUP_FRAME_BY_HORIZON = { s: 's15', m: 's1h', l: 's1d' };
 
 const instrumentMeta = {
-  gold: { name: 'طلا', symbol: 'XAU/USD', type: 'metal', decimals: 2, tv: 'XAUUSD', yahoo: 'GC=F' },
-  eurusd: { name: 'یورو/دلار', symbol: 'EUR/USD', type: 'fx', decimals: 4, tv: 'EURUSD', yahoo: 'EURUSD=X' },
-  gbpusd: { name: 'پوند/دلار', symbol: 'GBP/USD', type: 'fx', decimals: 4, tv: 'GBPUSD', yahoo: 'GBPUSD=X' },
-  usdjpy: { name: 'دلار/ین', symbol: 'USD/JPY', type: 'fx', decimals: 3, tv: 'USDJPY', yahoo: 'USDJPY=X' },
-  btc: { name: 'بیت‌کوین', symbol: 'BTC/USD', type: 'crypto', decimals: 2, tv: 'BTCUSD', yahoo: 'BTC-USD' },
-  dxy: { name: 'شاخص دلار', symbol: 'DXY', type: 'index', decimals: 2, tv: 'DXY', yahoo: 'DX-Y.NYB' },
-  dji: { name: 'داوجونز', symbol: 'DJI', type: 'index', decimals: 2, tv: 'DJI', yahoo: '%5EDJI' },
-  gspc: { name: 'اس‌اندپی 500', symbol: 'S&P 500', type: 'index', decimals: 2, tv: 'SPX', yahoo: '%5EGSPC' },
-  ixic: { name: 'نزدک', symbol: 'Nasdaq Composite', type: 'index', decimals: 2, tv: 'IXIC', yahoo: '%5EIXIC' },
-  rut: { name: 'راسل 2000', symbol: 'Russell 2000', type: 'index', decimals: 2, tv: 'RUT', yahoo: '%5ERUT' },
-  vix: { name: 'شاخص VIX', symbol: 'VIX', type: 'volatility', decimals: 2, tv: 'VIX', yahoo: '%5EVIX' },
+  gold: { name: 'Gold', symbol: 'XAU/USD', type: 'metal', decimals: 2, tv: 'XAUUSD', yahoo: 'GC=F' },
+  eurusd: { name: 'EUR/USD', symbol: 'EUR/USD', type: 'fx', decimals: 4, tv: 'EURUSD', yahoo: 'EURUSD=X' },
+  gbpusd: { name: 'GBP/USD', symbol: 'GBP/USD', type: 'fx', decimals: 4, tv: 'GBPUSD', yahoo: 'GBPUSD=X' },
+  usdjpy: { name: 'USD/JPY', symbol: 'USD/JPY', type: 'fx', decimals: 3, tv: 'USDJPY', yahoo: 'USDJPY=X' },
+  btc: { name: 'Bitcoin', symbol: 'BTC/USD', type: 'crypto', decimals: 2, tv: 'BTCUSD', yahoo: 'BTC-USD' },
+  dxy: { name: 'DXY', symbol: 'DXY', type: 'index', decimals: 2, tv: 'DXY', yahoo: 'DX-Y.NYB' },
+  dji: { name: 'Dow Jones', symbol: 'DJI', type: 'index', decimals: 2, tv: 'DJI', yahoo: '%5EDJI' },
+  gspc: { name: 'S&P 500', symbol: 'S&P 500', type: 'index', decimals: 2, tv: 'SPX', yahoo: '%5EGSPC' },
+  ixic: { name: 'Nasdaq Composite', symbol: 'Nasdaq Composite', type: 'index', decimals: 2, tv: 'IXIC', yahoo: '%5EIXIC' },
+  rut: { name: 'Russell 2000', symbol: 'Russell 2000', type: 'index', decimals: 2, tv: 'RUT', yahoo: '%5ERUT' },
+  vix: { name: 'VIX', symbol: 'VIX', type: 'volatility', decimals: 2, tv: 'VIX', yahoo: '%5EVIX' },
 };
 
 const countryMap = {
@@ -256,6 +256,7 @@ export default function App() {
   const [horizon, setHorizon] = useState('s');
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [clock, setClock] = useState(() => faClock(Date.now()));
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [dashboard, setDashboard] = useState(null);
   const [state, setState] = useState({
     loading: true,
@@ -293,6 +294,13 @@ export default function App() {
     tick();
     const timer = setInterval(tick, 30_000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 320);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const loadData = useCallback(async (manual = false) => {
@@ -554,6 +562,10 @@ export default function App() {
     } finally {
       window.location.reload();
     }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const sourceLabel = state.sourceMode === 'protected' ? 'نسخه محافظت‌شده Worker' : state.sourceMode === 'public' ? 'نسخه عمومی cache' : 'در حال اتصال';
@@ -995,6 +1007,9 @@ export default function App() {
           </section>
         )}
       </div>
+      {showScrollTop ? (
+        <button className="scroll-top-btn" onClick={scrollToTop} aria-label="Scroll to top">↑</button>
+      ) : null}
     </div>
   );
 }
