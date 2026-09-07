@@ -1,11 +1,11 @@
 const COUNTRY_TO_ASSETS = {
-  USD: ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc'],
+  USD: ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'],
   EUR: ['eurusd'],
   GBP: ['gbpusd'],
   JPY: ['usdjpy'],
   XAU: ['gold'],
   BTC: ['btc'],
-  All: ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc'],
+  All: ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'],
 };
 
 const ASSET_META = {
@@ -14,6 +14,12 @@ const ASSET_META = {
   gbpusd: { label: 'پوند/دلار', symbol: 'GBP/USD', type: 'fx', move: 0.65, strongMove: 1.0 },
   usdjpy: { label: 'دلار/ین', symbol: 'USD/JPY', type: 'fx', move: 0.65, strongMove: 1.0 },
   btc: { label: 'بیت‌کوین', symbol: 'BTC/USD', type: 'crypto', move: 4.5, strongMove: 7.5 },
+  dxy: { label: 'شاخص دلار', symbol: 'DXY', type: 'index', move: 0.4, strongMove: 0.8 },
+  dji: { label: 'داوجونز', symbol: 'DJI', type: 'index', move: 0.8, strongMove: 1.5 },
+  gspc: { label: 'S&P 500', symbol: 'SPX', type: 'index', move: 0.8, strongMove: 1.4 },
+  ixic: { label: 'Nasdaq', symbol: 'IXIC', type: 'index', move: 1.0, strongMove: 1.8 },
+  rut: { label: 'Russell 2000', symbol: 'RUT', type: 'index', move: 1.0, strongMove: 1.8 },
+  vix: { label: 'VIX', symbol: 'VIX', type: 'volatility', move: 5.0, strongMove: 10.0 },
 };
 
 const severityRank = { critical: 0, warning: 1, info: 2 };
@@ -36,9 +42,15 @@ export function inferTargetsFromText(text = '') {
   if (/(eur\/usd|eurusd|euro|ecb|germany|eurozone)/i.test(value)) set.add('eurusd');
   if (/(gbp\/usd|gbpusd|pound|sterling|boe|uk |british )/i.test(value)) set.add('gbpusd');
   if (/(usd\/jpy|usdjpy|yen|boj|japan)/i.test(value)) set.add('usdjpy');
+  if (/(dxy|dollar index|ice dollar)/i.test(value)) set.add('dxy');
+  if (/(dow jones|dow |\^dji|djia)/i.test(value)) set.add('dji');
+  if (/(s&p 500|sp500|\^gspc|standard and poor)/i.test(value)) set.add('gspc');
+  if (/(nasdaq|\^ixic|composite)/i.test(value)) set.add('ixic');
+  if (/(russell 2000|\^rut|small cap)/i.test(value)) set.add('rut');
+  if (/(vix|fear index|volatility index)/i.test(value)) set.add('vix');
 
   if (/(fed|fomc|powell|warsh|jackson hole|cpi|pce|payroll|nfp|jobs|inflation|treasury|dollar)/i.test(value)) {
-    ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc'].forEach((asset) => set.add(asset));
+    ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'].forEach((asset) => set.add(asset));
   }
 
   return [...set];
