@@ -935,3 +935,45 @@ h1 {
     height: 220px;
   }
 }
+
+body {
+  direction: rtl;
+}
+
+.ltr-text {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.mixed-text {
+  unicode-bidi: plaintext;
+}
+
+.warn-banner {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fde68a;
+  line-height: 1.9;
+}
+
+.quote-stats small,
+.calendar-row small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.news-title a,
+.quote-symbol,
+.summary-meta,
+.news-src,
+.pred-title {
+  overflow-wrap: anywhere;
+}
