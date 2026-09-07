@@ -4,13 +4,28 @@ import { ago, fa, faDateTime, fmt } from './lib/format';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const REFRESH_MS = 60 * 1000;
+const TIMEFRAMES = [
+  ['s1m', '1M'],
+  ['s5', '5M'],
+  ['s15', '15M'],
+  ['s1h', '1H'],
+  ['s1d', '1D'],
+  ['s1w', '1W'],
+];
+const SETUP_FRAME_BY_HORIZON = { s: 's15', m: 's1h', l: 's1d' };
 
 const instrumentMeta = {
-  gold: { name: 'طلا', symbol: 'XAU/USD', type: 'metal', decimals: 2 },
-  eurusd: { name: 'یورو/دلار', symbol: 'EUR/USD', type: 'fx', decimals: 4 },
-  gbpusd: { name: 'پوند/دلار', symbol: 'GBP/USD', type: 'fx', decimals: 4 },
-  usdjpy: { name: 'دلار/ین', symbol: 'USD/JPY', type: 'fx', decimals: 3 },
-  btc: { name: 'بیت‌کوین', symbol: 'BTC/USD', type: 'crypto', decimals: 2 },
+  gold: { name: 'طلا', symbol: 'XAU/USD', type: 'metal', decimals: 2, tv: 'XAUUSD', yahoo: 'GC=F' },
+  eurusd: { name: 'یورو/دلار', symbol: 'EUR/USD', type: 'fx', decimals: 4, tv: 'EURUSD', yahoo: 'EURUSD=X' },
+  gbpusd: { name: 'پوند/دلار', symbol: 'GBP/USD', type: 'fx', decimals: 4, tv: 'GBPUSD', yahoo: 'GBPUSD=X' },
+  usdjpy: { name: 'دلار/ین', symbol: 'USD/JPY', type: 'fx', decimals: 3, tv: 'USDJPY', yahoo: 'USDJPY=X' },
+  btc: { name: 'بیت‌کوین', symbol: 'BTC/USD', type: 'crypto', decimals: 2, tv: 'BTCUSD', yahoo: 'BTC-USD' },
+  dxy: { name: 'شاخص دلار', symbol: 'DXY', type: 'index', decimals: 2, tv: 'DXY', yahoo: 'DX-Y.NYB' },
+  dji: { name: 'داوجونز', symbol: 'DJI', type: 'index', decimals: 2, tv: 'DJI', yahoo: '%5EDJI' },
+  gspc: { name: 'اس‌اندپی 500', symbol: 'S&P 500', type: 'index', decimals: 2, tv: 'SPX', yahoo: '%5EGSPC' },
+  ixic: { name: 'نزدک', symbol: 'Nasdaq Composite', type: 'index', decimals: 2, tv: 'IXIC', yahoo: '%5EIXIC' },
+  rut: { name: 'راسل 2000', symbol: 'Russell 2000', type: 'index', decimals: 2, tv: 'RUT', yahoo: '%5ERUT' },
+  vix: { name: 'شاخص VIX', symbol: 'VIX', type: 'volatility', decimals: 2, tv: 'VIX', yahoo: '%5EVIX' },
 };
 
 const countryMap = {
@@ -76,32 +91,53 @@ function normalizeImpact(value) {
   return 'low';
 }
 
-function sparkline(values) {
-  const list = values.filter(Number.isFinite).slice(-24);
-  if (!list.length) {
+function frameToPoints(frame) {
+  if (!frame || !Array.isArray(frame.c)) return [];
+  return frame.c
+    .map((close, index) => ({
+      close: safeNumber(close),
+      time: safeNumber(frame.t?.[index], Date.now() - (frame.c.length - index) * 60_000),
+    }))
+    .filter((point) => Number.isFinite(point.close));
+}
+
+function buildChart(points, width = 760, height = 280) {
+  const values = points.map((point) => point.close).filter(Number.isFinite);
+  if (!values.length) {
     return {
-      path: 'M0,28 L240,28',
+      line: `M0,${height / 2} L${width},${height / 2}`,
+      fill: `M0,${height / 2} L${width},${height / 2} L${width},${height} L0,${height} Z`,
       color: '#94a3b8',
-      width: 240,
-      height: 56,
-      pad: 3,
+      width,
+      height,
+      low: 0,
+      high: 0,
     };
   }
-  const min = Math.min(...list);
-  const max = Math.max(...list);
-  const width = 240;
-  const height = 56;
-  const pad = 3;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
   const range = max - min || 1;
-  const path = list
-    .map((value, index) => {
-      const x = pad + (index / (list.length - 1 || 1)) * (width - pad * 2);
-      const y = height - pad - ((value - min) / range) * (height - pad * 2);
-      return `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
+  const padX = 12;
+  const padY = 18;
+  const path = points
+    .map((point, index) => {
+      const x = padX + (index / (points.length - 1 || 1)) * (width - padX * 2);
+      const y = height - padY - ((point.close - min) / range) * (height - padY * 2);
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
-  const up = list.at(-1) >= list[0];
-  return { path, color: up ? '#22c55e' : '#ef4444', width, height, pad };
+  const first = values[0];
+  const last = values.at(-1);
+  const color = last >= first ? '#22c55e' : '#ef4444';
+  return {
+    line: path,
+    fill: `${path} L${width - padX},${height - padY} L${padX},${height - padY} Z`,
+    color,
+    width,
+    height,
+    low: min,
+    high: max,
+  };
 }
 
 function computeNewsBadge(newsItems, seen) {
@@ -109,52 +145,54 @@ function computeNewsBadge(newsItems, seen) {
   return unseen > 9 ? '۹+' : fa(unseen);
 }
 
-function pickSeries(item) {
-  const candidates = [item?.s15, item?.s1h, item?.s5, item?.s1d];
-  const best = candidates.find((series) => Array.isArray(series?.c) && series.c.length > 1);
-  if (!best) return [];
-  return best.c.map((close, index) => ({
-    close: safeNumber(close),
-    time: safeNumber(best.t?.[index], Date.now() - (best.c.length - index) * 60_000),
-  }));
+function compact(value) {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(value);
+}
+
+function buildTradingViewUrl(id) {
+  const code = instrumentMeta[id]?.tv;
+  return code ? `https://www.tradingview.com/symbols/${code}/` : null;
+}
+
+function buildYahooUrl(id) {
+  const code = instrumentMeta[id]?.yahoo;
+  return code ? `https://finance.yahoo.com/quote/${code}` : null;
 }
 
 function normalizeInstrument(id, item) {
-  const meta = instrumentMeta[id] || {
-    name: id,
-    symbol: id.toUpperCase(),
-    type: 'market',
-    decimals: 2,
-  };
-  const series = pickSeries(item);
-  const values = series.map((point) => point.close);
+  const meta = instrumentMeta[id] || { name: id, symbol: id.toUpperCase(), type: 'market', decimals: 2 };
+  const frames = Object.fromEntries(
+    TIMEFRAMES.map(([key]) => [key, frameToPoints(item?.[key])]).filter(([, list]) => list.length),
+  );
+  const defaultFrame = TIMEFRAMES.find(([key]) => frames[key]?.length)?.[0] || 's1d';
+  const defaultSeries = frames[defaultFrame] || [];
+  const values = defaultSeries.map((point) => point.close);
   return {
     id,
     ...meta,
-    source: (item.providerChain || [item.provider]).filter(Boolean).join(' → ') || 'cache',
-    price: safeNumber(item.p),
-    prevClose: safeNumber(item.pc, safeNumber(item.p)),
-    series,
+    frames,
+    defaultFrame,
+    defaultSeries,
     values,
-    spark: sparkline(values),
-    analysis: values.length >= 14 ? analyze(values) : null,
+    price: safeNumber(item?.p),
+    prevClose: safeNumber(item?.pc, safeNumber(item?.p)),
+    source: (item?.providerChain || [item?.provider]).filter(Boolean).join(' → ') || 'cache',
+    updatedAt: defaultSeries.at(-1)?.time || Date.now(),
   };
 }
 
 function normalizeNewsItem(item) {
-  const source = item.src || item.source || 'خبر';
-  const published = safeNumber(item.dt || item.date, Date.now());
   const title = item.title || 'خبر بدون عنوان';
   return {
     key: item.key || `${String(item.link || '').toLowerCase()}|${title.toLowerCase()}`,
     title,
     link: item.link || '#',
-    source,
+    source: item.src || item.source || 'خبر',
     topic: item.topic || 'بازار',
     impact: normalizeImpact(item.impact),
     sentiment: item.sentiment || 'neu',
     targets: Array.isArray(item.targets) ? item.targets : [],
-    date: published,
+    date: safeNumber(item.dt || item.date, Date.now()),
   };
 }
 
@@ -197,18 +235,23 @@ async function parseJsonSafe(response) {
 export default function App() {
   const [tab, setTab] = useState('market');
   const [theme, setTheme] = useState(() => storeGet('rfx_theme', 'dark'));
-  const [favorites, setFavorites] = useState(() => storeGet('rfx_favs', []));
+  const [favorites, setFavorites] = useState(() => storeGet('rfx_favs', ['gold', 'btc', 'dxy']));
   const [marketQuery, setMarketQuery] = useState('');
   const [marketType, setMarketType] = useState('all');
   const [marketSort, setMarketSort] = useState('default');
   const [onlyFavs, setOnlyFavs] = useState(false);
+  const [selectedId, setSelectedId] = useState(() => storeGet('rfx_selected', 'gold'));
+  const [selectedFrame, setSelectedFrame] = useState(() => storeGet('rfx_frame', 's1d'));
   const [newsImpact, setNewsImpact] = useState('all');
   const [newsAsset, setNewsAsset] = useState('all');
+  const [newsOrder, setNewsOrder] = useState('newest');
   const [newsSeen, setNewsSeen] = useState(() => storeGet('rfx_news_seen', []));
   const [calImpact, setCalImpact] = useState('all');
   const [calCountry, setCalCountry] = useState('all');
+  const [calendarOrder, setCalendarOrder] = useState('upcoming');
   const [alertSeverity, setAlertSeverity] = useState('all');
   const [alertAsset, setAlertAsset] = useState('all');
+  const [alertOrder, setAlertOrder] = useState('newest');
   const [horizon, setHorizon] = useState('s');
   const [clock, setClock] = useState(() => new Date().toLocaleTimeString('en-GB'));
   const [dashboard, setDashboard] = useState(null);
@@ -231,13 +274,20 @@ export default function App() {
   }, [favorites]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setClock(new Date().toLocaleTimeString('en-GB'));
-    }, 1000);
+    storeSet('rfx_selected', selectedId);
+  }, [selectedId]);
+
+  useEffect(() => {
+    storeSet('rfx_frame', selectedFrame);
+  }, [selectedFrame]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setClock(new Date().toLocaleTimeString('en-GB')), 1000);
     return () => clearInterval(timer);
   }, []);
 
   const loadData = useCallback(async (manual = false) => {
+    const nonce = Date.now();
     setState((current) => ({
       ...current,
       loading: current.lastLoaded === 0,
@@ -246,63 +296,35 @@ export default function App() {
     }));
 
     try {
-      const sessionResponse = await fetch(`${API_BASE}/session`, {
+      const sessionResponse = await fetch(`${API_BASE}/session?ts=${nonce}`, {
         credentials: 'include',
         headers: { accept: 'application/json' },
+        cache: 'no-store',
       });
       const sessionPayload = await parseJsonSafe(sessionResponse);
 
       if (sessionResponse.ok && sessionPayload?.authenticated) {
-        const dashboardResponse = await fetch(`${API_BASE}/dashboard`, {
+        const dashboardResponse = await fetch(`${API_BASE}/dashboard?ts=${nonce}`, {
           credentials: 'include',
           headers: { accept: 'application/json' },
+          cache: 'no-store',
         });
         const dashboardPayload = await parseJsonSafe(dashboardResponse);
-        if (!dashboardResponse.ok) {
-          throw new Error(dashboardPayload?.error || `dashboard ${dashboardResponse.status}`);
-        }
-
+        if (!dashboardResponse.ok) throw new Error(dashboardPayload?.error || `dashboard ${dashboardResponse.status}`);
         setDashboard(dashboardPayload?.data || dashboardPayload);
-        setState({
-          loading: false,
-          refreshing: false,
-          sourceMode: 'protected',
-          error: '',
-          lastLoaded: Date.now(),
-          authenticated: true,
-        });
+        setState({ loading: false, refreshing: false, sourceMode: 'protected', error: '', lastLoaded: Date.now(), authenticated: true });
         return;
       }
 
-      if (sessionResponse.status === 401 || (sessionResponse.ok && sessionPayload?.authenticated === false)) {
-        setState({
-          loading: false,
-          refreshing: false,
-          sourceMode: 'protected',
-          error: 'نشست ورود منقضی شده یا از لینک اصلی Worker باز نکرده‌ای. صفحه را از همان آدرس محافظت‌شده دوباره باز کن.',
-          lastLoaded: 0,
-          authenticated: false,
-        });
-        return;
-      }
-
-      const fallbackResponse = await fetch('/data/prices.json', {
+      const fallbackResponse = await fetch(`/data/prices.json?ts=${nonce}`, {
         headers: { accept: 'application/json' },
+        cache: 'no-store',
       });
       const fallbackPayload = await parseJsonSafe(fallbackResponse);
-      if (!fallbackResponse.ok) {
-        throw new Error('نسخه عمومی data/prices.json هم در دسترس نیست');
-      }
+      if (!fallbackResponse.ok) throw new Error('نسخه عمومی data/prices.json در دسترس نیست');
 
       setDashboard(fallbackPayload);
-      setState({
-        loading: false,
-        refreshing: false,
-        sourceMode: 'public',
-        error: '',
-        lastLoaded: Date.now(),
-        authenticated: false,
-      });
+      setState({ loading: false, refreshing: false, sourceMode: 'public', error: '', lastLoaded: Date.now(), authenticated: false });
     } catch (error) {
       setState({
         loading: false,
@@ -326,48 +348,45 @@ export default function App() {
     return Object.entries(inst)
       .map(([id, item]) => normalizeInstrument(id, item))
       .filter((item) => Number.isFinite(item.price) && Number.isFinite(item.prevClose))
-      .map((item) => ({
-        ...item,
-        change: item.price - item.prevClose,
-        changePct: item.prevClose ? ((item.price - item.prevClose) / item.prevClose) * 100 : 0,
-      }));
+      .map((item) => {
+        const defaultValues = item.defaultSeries.map((point) => point.close);
+        return {
+          ...item,
+          change: item.price - item.prevClose,
+          changePct: item.prevClose ? ((item.price - item.prevClose) / item.prevClose) * 100 : 0,
+          analysis: defaultValues.length >= 14 ? analyze(defaultValues) : null,
+        };
+      });
   }, [dashboard]);
 
-  const newsRows = useMemo(
-    () => (dashboard?.news || []).map(normalizeNewsItem),
-    [dashboard],
-  );
+  useEffect(() => {
+    if (!marketRows.length) return;
+    if (!marketRows.some((item) => item.id === selectedId)) setSelectedId(marketRows[0].id);
+  }, [marketRows, selectedId]);
 
-  const calendarRows = useMemo(
-    () => (dashboard?.cal || []).map(normalizeCalendarItem),
-    [dashboard],
+  const selectedInstrument = useMemo(
+    () => marketRows.find((item) => item.id === selectedId) || marketRows[0] || null,
+    [marketRows, selectedId],
   );
-
-  const alertsRows = useMemo(
-    () => (dashboard?.alerts || []).map(normalizeAlertItem),
-    [dashboard],
-  );
-
-  const alertSummary = useMemo(() => {
-    const incoming = dashboard?.alertSummary;
-    if (incoming) return incoming;
-    return {
-      critical: alertsRows.filter((item) => item.severity === 'critical').length,
-      warning: alertsRows.filter((item) => item.severity === 'warning').length,
-      info: alertsRows.filter((item) => item.severity === 'info').length,
-    };
-  }, [alertsRows, dashboard]);
 
   useEffect(() => {
-    if (!newsRows.length) return;
-    const boot = storeGet('rfx_news_boot', false);
-    if (!boot) {
-      const keys = newsRows.map((item) => item.key);
-      setNewsSeen(keys);
-      storeSet('rfx_news_seen', keys);
-      storeSet('rfx_news_boot', true);
-    }
-  }, [newsRows]);
+    if (!selectedInstrument) return;
+    const available = TIMEFRAMES.map(([key]) => key).filter((key) => selectedInstrument.frames[key]?.length);
+    if (!available.includes(selectedFrame)) setSelectedFrame(selectedInstrument.defaultFrame);
+  }, [selectedFrame, selectedInstrument]);
+
+  const currentSeries = useMemo(() => {
+    if (!selectedInstrument) return [];
+    return selectedInstrument.frames[selectedFrame] || selectedInstrument.defaultSeries || [];
+  }, [selectedFrame, selectedInstrument]);
+
+  const currentValues = useMemo(() => currentSeries.map((point) => point.close), [currentSeries]);
+  const currentAnalysis = useMemo(() => (currentValues.length >= 14 ? analyze(currentValues) : null), [currentValues]);
+  const currentChart = useMemo(() => buildChart(currentSeries), [currentSeries]);
+
+  const newsRows = useMemo(() => (dashboard?.news || []).map(normalizeNewsItem), [dashboard]);
+  const calendarRows = useMemo(() => (dashboard?.cal || []).map(normalizeCalendarItem), [dashboard]);
+  const alertsRows = useMemo(() => (dashboard?.alerts || []).map(normalizeAlertItem), [dashboard]);
 
   useEffect(() => {
     storeSet('rfx_news_seen', newsSeen);
@@ -390,28 +409,39 @@ export default function App() {
   }, [favorites, marketQuery, marketRows, marketSort, marketType, onlyFavs]);
 
   const filteredNews = useMemo(() => {
-    return newsRows.filter((item) => {
+    const list = newsRows.filter((item) => {
       const impactOK = newsImpact === 'all' || item.impact === newsImpact;
       const assetOK = newsAsset === 'all' || item.targets.includes(newsAsset);
       return impactOK && assetOK;
     });
-  }, [newsAsset, newsImpact, newsRows]);
+    if (newsOrder === 'oldest') return [...list].sort((a, b) => a.date - b.date);
+    if (newsOrder === 'unseen-first') return [...list].sort((a, b) => Number(newsSeen.includes(a.key)) - Number(newsSeen.includes(b.key)) || b.date - a.date);
+    return [...list].sort((a, b) => b.date - a.date);
+  }, [newsAsset, newsImpact, newsOrder, newsRows, newsSeen]);
 
   const filteredCalendar = useMemo(() => {
-    return calendarRows.filter((item) => {
+    const list = calendarRows.filter((item) => {
       const impactOK = calImpact === 'all' || item.impact === calImpact;
       const countryOK = calCountry === 'all' || item.country === calCountry;
       return impactOK && countryOK;
     });
-  }, [calCountry, calImpact, calendarRows]);
+    if (calendarOrder === 'latest') return [...list].sort((a, b) => b.date - a.date);
+    return [...list].sort((a, b) => a.date - b.date);
+  }, [calCountry, calImpact, calendarOrder, calendarRows]);
 
   const filteredAlerts = useMemo(() => {
-    return alertsRows.filter((item) => {
+    const list = alertsRows.filter((item) => {
       const sevOK = alertSeverity === 'all' || item.severity === alertSeverity;
       const assetOK = alertAsset === 'all' || item.assetIds.includes(alertAsset);
       return sevOK && assetOK;
     });
-  }, [alertAsset, alertSeverity, alertsRows]);
+    if (alertOrder === 'oldest') return [...list].sort((a, b) => (a.eventTime || a.createdAt) - (b.eventTime || b.createdAt));
+    if (alertOrder === 'critical-first') return [...list].sort((a, b) => {
+      const rank = { critical: 0, warning: 1, info: 2 };
+      return rank[a.severity] - rank[b.severity] || (b.eventTime || b.createdAt) - (a.eventTime || a.createdAt);
+    });
+    return [...list].sort((a, b) => (b.eventTime || b.createdAt) - (a.eventTime || a.createdAt));
+  }, [alertAsset, alertOrder, alertSeverity, alertsRows]);
 
   const horizonMap = {
     s: ['کوتاه‌مدت · ۱ تا ۷ روز', 1.2],
@@ -422,18 +452,19 @@ export default function App() {
   const setups = useMemo(() => {
     const penaltyByCountry = (instrumentId) => {
       const affected = {
-        gold: ['USD'],
-        eurusd: ['EUR', 'USD'],
-        gbpusd: ['GBP', 'USD'],
-        usdjpy: ['USD', 'JPY'],
+        gold: ['USD', 'All'],
+        eurusd: ['EUR', 'USD', 'All'],
+        gbpusd: ['GBP', 'USD', 'All'],
+        usdjpy: ['USD', 'JPY', 'All'],
         btc: ['USD', 'All'],
+        dxy: ['USD', 'All'],
+        dji: ['USD', 'All'],
+        gspc: ['USD', 'All'],
+        ixic: ['USD', 'All'],
+        rut: ['USD', 'All'],
+        vix: ['USD', 'All'],
       }[instrumentId] || [];
-      const next = calendarRows.find(
-        (item) =>
-          affected.includes(item.country) &&
-          item.date > Date.now() &&
-          item.date < Date.now() + 30 * 60 * 60 * 1000,
-      );
+      const next = calendarRows.find((item) => affected.includes(item.country) && item.date > Date.now() && item.date < Date.now() + 30 * 60 * 60 * 1000);
       if (!next) return { penalty: 0, text: 'رویداد پرریسک نزدیک ندارد' };
       return {
         penalty: next.impact === 'high' ? 12 : next.impact === 'medium' ? 6 : 2,
@@ -451,19 +482,37 @@ export default function App() {
 
     return marketRows
       .map((item) => {
-        if (item.values.length < 14) return null;
+        const frameKey = SETUP_FRAME_BY_HORIZON[horizon];
+        const values = (item.frames[frameKey] || item.defaultSeries).map((point) => point.close);
+        if (values.length < 14) return null;
         const risk = penaltyByCountry(item.id);
         const newsScore = newsScoreFor(item.id);
         return {
           item,
           risk,
-          setup: buildSetup(item.values, newsScore, risk.penalty, horizonMap[horizon][1]),
+          frameKey,
+          setup: buildSetup(values, newsScore, risk.penalty, horizonMap[horizon][1]),
         };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => (b.setup?.combo || 0) - (a.setup?.combo || 0));
   }, [calendarRows, horizon, marketRows, newsRows]);
 
+  const alertSummary = useMemo(() => {
+    const incoming = dashboard?.alertSummary;
+    if (incoming) return incoming;
+    return {
+      critical: alertsRows.filter((item) => item.severity === 'critical').length,
+      warning: alertsRows.filter((item) => item.severity === 'warning').length,
+      info: alertsRows.filter((item) => item.severity === 'info').length,
+    };
+  }, [alertsRows, dashboard]);
+
   const providerRows = useMemo(() => Object.entries(dashboard?.meta?.providerStatus || {}), [dashboard]);
+  const newsBadge = useMemo(() => computeNewsBadge(newsRows, newsSeen), [newsRows, newsSeen]);
+  const alertsBadge = useMemo(() => alertSummary.critical + alertSummary.warning, [alertSummary]);
+  const criticalAlerts = useMemo(() => alertsRows.filter((item) => item.severity === 'critical').slice(0, 3), [alertsRows]);
+  const topSetups = useMemo(() => setups.slice(0, 3), [setups]);
 
   const summary = useMemo(() => {
     const rising = visibleMarkets.filter((item) => item.change >= 0).length;
@@ -472,24 +521,20 @@ export default function App() {
     return { rising, falling, mover };
   }, [marketRows, visibleMarkets]);
 
-  const newsBadge = useMemo(() => computeNewsBadge(newsRows, newsSeen), [newsRows, newsSeen]);
-  const alertsBadge = useMemo(() => alertSummary.critical + alertSummary.warning, [alertSummary]);
-  const criticalAlerts = useMemo(() => alertsRows.filter((item) => item.severity === 'critical').slice(0, 3), [alertsRows]);
-  const topSetups = useMemo(
-    () => setups.filter((entry) => entry?.setup).sort((a, b) => (b.setup.combo || 0) - (a.setup.combo || 0)).slice(0, 3),
-    [setups],
-  );
+  const marketTypeCounts = useMemo(() => {
+    return marketRows.reduce((acc, item) => {
+      acc[item.type] = (acc[item.type] || 0) + 1;
+      return acc;
+    }, {});
+  }, [marketRows]);
 
   const toggleFavorite = (id) => {
-    setFavorites((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
-    );
+    setFavorites((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
   };
 
   const markAllNewsSeen = () => {
     const keys = newsRows.map((item) => item.key);
     setNewsSeen(keys);
-    storeSet('rfx_news_seen', keys);
   };
 
   const switchTab = (nextTab) => {
@@ -499,28 +544,20 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE}/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await fetch(`${API_BASE}/logout`, { method: 'POST', credentials: 'include' });
     } finally {
       window.location.reload();
     }
   };
 
-  const sourceLabel =
-    state.sourceMode === 'protected'
-      ? 'نسخه محافظت‌شده Worker'
-      : state.sourceMode === 'public'
-        ? 'نسخه عمومی cache'
-        : 'در حال اتصال';
+  const sourceLabel = state.sourceMode === 'protected' ? 'نسخه محافظت‌شده Worker' : state.sourceMode === 'public' ? 'نسخه عمومی cache' : 'در حال اتصال';
 
   if (state.loading && !dashboard) {
     return (
       <div className="app-shell centered-state">
         <div className="panel-card loading-card">
           <div className="section-title">در حال بارگیری داشبورد</div>
-          <div className="hero-note">در حال بررسی session و دریافت JSON بازار از Worker یا فایل cache عمومی...</div>
+          <div className="hero-note">در حال دریافت JSON بازار، خبر و تقویم از Worker یا cache سایت...</div>
         </div>
       </div>
     );
@@ -533,9 +570,7 @@ export default function App() {
           <div className="section-title">بارگیری ناموفق بود</div>
           <div className="hero-note">{state.error || 'هیچ داده‌ای دریافت نشد.'}</div>
           <div className="hero-actions top-gap">
-            <button className="icon-btn wide-btn" onClick={() => loadData(true)}>
-              تلاش دوباره
-            </button>
+            <button className="icon-btn wide-btn" onClick={() => loadData(true)}>تلاش دوباره</button>
           </div>
         </div>
       </div>
@@ -547,34 +582,18 @@ export default function App() {
       <div className="container">
         <header className="page-header">
           <div>
-            <h1>داشبورد حرفه‌ای فارکس، طلا و بیت‌کوین</h1>
-            <div className="subtext">
-              {sourceLabel} · آخرین بارگیری: {faDateTime(state.lastLoaded || dashboard?.ts || Date.now())} · ساعت محلی: {clock}
-            </div>
+            <h1>داشبورد بازارها</h1>
+            <div className="subtext">{sourceLabel} · آخرین بارگیری: {faDateTime(state.lastLoaded || dashboard?.ts || Date.now())} · ساعت: {clock}</div>
           </div>
           <div className="header-actions wrap-gap">
-            <span className={`live-badge ${state.sourceMode === 'public' ? 'badge-soft' : ''}`}>
-              {state.sourceMode === 'protected' ? 'پشت Worker' : 'Public cache'}
-            </span>
-            <button className="icon-btn wide-btn" onClick={() => loadData(true)}>
-              {state.refreshing ? 'در حال بروزرسانی...' : 'بروزرسانی'}
-            </button>
-            {state.sourceMode === 'protected' ? (
-              <button className="icon-btn wide-btn" onClick={handleLogout}>
-                خروج
-              </button>
-            ) : null}
-            <button className="icon-btn" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-              {theme === 'light' ? '☾' : '☀'}
-            </button>
+            <span className={`live-badge ${state.sourceMode === 'public' ? 'badge-soft' : ''}`}>{state.sourceMode === 'protected' ? 'Protected' : 'Public cache'}</span>
+            <button className="icon-btn wide-btn" onClick={() => loadData(true)}>{state.refreshing ? '...' : 'Refresh'}</button>
+            {state.authenticated ? <button className="icon-btn wide-btn" onClick={handleLogout}>خروج</button> : null}
+            <button className="icon-btn" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? '☾' : '☀'}</button>
           </div>
         </header>
 
-        {state.error ? (
-          <div className="error-banner">
-            <b>توجه:</b> {state.error}
-          </div>
-        ) : null}
+        {state.error ? <div className="error-banner"><b>توجه:</b> {state.error}</div> : null}
 
         {criticalAlerts.length ? (
           <div className="critical-strip">
@@ -592,11 +611,7 @@ export default function App() {
 
         <div className="tabs">
           {tabs.map(([key, label]) => (
-            <button
-              key={key}
-              className={`tab ${tab === key ? 'active' : ''}`}
-              onClick={() => switchTab(key)}
-            >
+            <button key={key} className={`tab ${tab === key ? 'active' : ''}`} onClick={() => switchTab(key)}>
               {label}
               {key === 'news' && newsBadge !== '۰' ? <span className="nb">{newsBadge}</span> : null}
               {key === 'alerts' && alertsBadge > 0 ? <span className="nb">{fa(alertsBadge)}</span> : null}
@@ -604,35 +619,131 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 'market' && (
+        {tab === 'market' && selectedInstrument ? (
           <section>
             <div className="hero-panel">
               <div>
-                <div className="section-title">نمای کلی بازار</div>
-                <div className="hero-note">
-                  {state.sourceMode === 'protected'
-                    ? 'الان فرانت‌اند React به Worker و /api/dashboard وصل است. یعنی سایت محافظت‌شده می‌تواند داده، خبر، تقویم و هشدار را از بک‌اند بگیرد.'
-                    : 'الان این نما از data/prices.json عمومی تغذیه می‌شود. برای نسخه خصوصی و session‌دار، همین صفحه را از لینک Worker باز کن.'}
-                </div>
+                <div className="section-title">رصد بازار به سبک finance board</div>
+                <div className="hero-note">الان علاوه بر طلا، فارکس و بیت‌کوین، شاخص‌های مهم مثل DXY، Dow، S&P 500، Nasdaq، Russell 2000 و VIX هم وارد سیستم شده‌اند. با کلیک روی هر نماد، نمودار و جزئیاتش عوض می‌شود.</div>
               </div>
               <div className="hero-actions">
-                <span className="badge">{fa(marketRows.length)} نماد</span>
-                <span className="badge">{fa(alertSummary.critical)} هشدار بحرانی</span>
-                <span className="badge">ورژن داده: {dashboard?.meta?.version || '2.x'}</span>
+                <span className="badge">اخبار: {fa(newsRows.length)}</span>
+                <span className="badge">هشدارها: {fa(alertsRows.length)}</span>
+                <span className="badge">نمادها: {fa(marketRows.length)}</span>
               </div>
             </div>
 
+            <div className="market-layout">
+              <div className="quote-panel">
+                <div className="quote-header">
+                  <div>
+                    <div className="quote-name">{selectedInstrument.name}</div>
+                    <div className="quote-symbol">{selectedInstrument.symbol} · {selectedInstrument.source}</div>
+                  </div>
+                  <div className="card-actions wrap-gap">
+                    <span className={`tag ${currentAnalysis?.tone === 'up' ? 'tag-buy' : currentAnalysis?.tone === 'down' ? 'tag-sell' : 'tag-low'}`}>{currentAnalysis?.label || 'داده کم'}</span>
+                    <button className={`fav-btn ${favorites.includes(selectedInstrument.id) ? 'active' : ''}`} onClick={() => toggleFavorite(selectedInstrument.id)}>★</button>
+                    {buildTradingViewUrl(selectedInstrument.id) ? <a className="mini-link" href={buildTradingViewUrl(selectedInstrument.id)} target="_blank" rel="noreferrer">TradingView ↗</a> : null}
+                    {buildYahooUrl(selectedInstrument.id) ? <a className="mini-link" href={buildYahooUrl(selectedInstrument.id)} target="_blank" rel="noreferrer">Yahoo ↗</a> : null}
+                  </div>
+                </div>
+
+                <div className="quote-price-row">
+                  <div>
+                    <div className="quote-price" dir="ltr">{fmt(selectedInstrument.price, selectedInstrument.decimals)}</div>
+                    <div className={`card-change ${selectedInstrument.change >= 0 ? 'up' : 'down'}`} dir="ltr">
+                      {selectedInstrument.change >= 0 ? '▲' : '▼'} {fmt(Math.abs(selectedInstrument.change), selectedInstrument.decimals)} ({selectedInstrument.changePct.toFixed(2)}%)
+                    </div>
+                  </div>
+                  <div className="quote-stats">
+                    <div><span>RSI</span><b>{currentAnalysis?.rsi?.toFixed(1) || '—'}</b></div>
+                    <div><span>Low</span><b dir="ltr">{fmt(currentChart.low, selectedInstrument.decimals)}</b></div>
+                    <div><span>High</span><b dir="ltr">{fmt(currentChart.high, selectedInstrument.decimals)}</b></div>
+                    <div><span>Updated</span><b>{faDateTime(selectedInstrument.updatedAt)}</b></div>
+                  </div>
+                </div>
+
+                <div className="timeframe-row">
+                  {TIMEFRAMES.filter(([key]) => selectedInstrument.frames[key]?.length).map(([key, label]) => (
+                    <button key={key} className={`tf-btn ${selectedFrame === key ? 'active' : ''}`} onClick={() => setSelectedFrame(key)}>{label}</button>
+                  ))}
+                </div>
+
+                <div className="big-chart">
+                  <svg viewBox={`0 0 ${currentChart.width} ${currentChart.height}`} preserveAspectRatio="none">
+                    <path d={currentChart.fill} fill={currentChart.color} opacity="0.12" />
+                    <path d={currentChart.line} fill="none" stroke={currentChart.color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                  </svg>
+                </div>
+
+                <div className="quote-footer-grid">
+                  <div className="summary-card">
+                    <div className="summary-label">نوع دارایی</div>
+                    <div className="summary-value smallish">{selectedInstrument.type}</div>
+                  </div>
+                  <div className="summary-card">
+                    <div className="summary-label">نقاط سری</div>
+                    <div className="summary-value smallish">{fa(currentSeries.length)}</div>
+                  </div>
+                  <div className="summary-card">
+                    <div className="summary-label">ATR تقریبی</div>
+                    <div className="summary-value smallish" dir="ltr">{currentAnalysis?.atr ? fmt(currentAnalysis.atr, selectedInstrument.decimals) : '—'}</div>
+                  </div>
+                  <div className="summary-card">
+                    <div className="summary-label">Pivot</div>
+                    <div className="summary-value smallish" dir="ltr">{currentAnalysis?.sr ? fmt(currentAnalysis.sr.pivot, selectedInstrument.decimals) : '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="watchlist-panel">
+                <div className="section-title">Watchlist</div>
+                <div className="toolbar compact-toolbar">
+                  <input className="mini-input" placeholder="جستجو" value={marketQuery} onChange={(event) => setMarketQuery(event.target.value)} />
+                  <select className="mini-select" value={marketType} onChange={(event) => setMarketType(event.target.value)}>
+                    <option value="all">همه</option>
+                    <option value="fx">فارکس</option>
+                    <option value="metal">فلزات</option>
+                    <option value="crypto">کریپتو</option>
+                    <option value="index">شاخص</option>
+                    <option value="volatility">نوسان</option>
+                  </select>
+                  <select className="mini-select" value={marketSort} onChange={(event) => setMarketSort(event.target.value)}>
+                    <option value="default">ترتیب عادی</option>
+                    <option value="change-desc">بیشترین رشد</option>
+                    <option value="change-asc">بیشترین افت</option>
+                    <option value="price-desc">بیشترین قیمت</option>
+                    <option value="alpha">الفبایی</option>
+                  </select>
+                  <label className="toggle-pill"><input type="checkbox" checked={onlyFavs} onChange={(event) => setOnlyFavs(event.target.checked)} /> فقط منتخب‌ها</label>
+                </div>
+                <div className="watchlist-meta">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)}</div>
+                <div className="watchlist-list">
+                  {visibleMarkets.map((item) => (
+                    <button key={item.id} className={`watchlist-item ${selectedInstrument.id === item.id ? 'active' : ''}`} onClick={() => setSelectedId(item.id)}>
+                      <div>
+                        <div className="card-name">{item.name}</div>
+                        <div className="card-symbol">{item.symbol}</div>
+                      </div>
+                      <div className="watchlist-price" dir="ltr">
+                        <div>{fmt(item.price, item.decimals)}</div>
+                        <div className={item.change >= 0 ? 'up' : 'down'}>{item.changePct.toFixed(2)}%</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            </div>
+
             <div className="opportunity-grid">
-              {topSetups.map(({ item, setup, risk }) => (
+              {topSetups.map(({ item, setup, risk, frameKey }) => (
                 <div key={item.id} className="opportunity-card">
                   <div className="row-between wrap-gap">
                     <div>
                       <div className="pred-title">{item.name}</div>
-                      <div className="summary-meta">{item.symbol}</div>
+                      <div className="summary-meta">{item.symbol} · {frameKey}</div>
                     </div>
-                    <span className={`tag ${setup.side === 'buy' ? 'tag-buy' : setup.side === 'sell' ? 'tag-sell' : 'tag-low'}`}>
-                      {setup.title}
-                    </span>
+                    <span className={`tag ${setup.side === 'buy' ? 'tag-buy' : setup.side === 'sell' ? 'tag-sell' : 'tag-low'}`}>{setup.title}</span>
                   </div>
                   <div className="opportunity-score">اعتماد {fa(setup.combo)}٪</div>
                   <div className="summary-meta">ورود: {fmt(setup.entryLow, item.decimals)} — {fmt(setup.entryHigh, item.decimals)}</div>
@@ -643,100 +754,17 @@ export default function App() {
             </div>
 
             <div className="summary-grid">
-              <div className="summary-card">
-                <div className="summary-label">نمادهای قابل مشاهده</div>
-                <div className="summary-value">{fa(visibleMarkets.length)}</div>
-                <div className="summary-meta">{fa(favorites.length)} نماد در منتخب‌ها</div>
-              </div>
-              <div className="summary-card">
-                <div className="summary-label">جهت بازار</div>
-                <div className="summary-value">{fa(summary.rising)} / {fa(summary.falling)}</div>
-                <div className="summary-meta">صعودی / نزولی</div>
-              </div>
-              <div className="summary-card">
-                <div className="summary-label">بیشترین نوسان</div>
-                <div className={`summary-value ${summary.mover?.changePct >= 0 ? 'up' : 'down'}`}>
-                  {summary.mover?.symbol || '—'}
-                </div>
-                <div className="summary-meta">{summary.mover ? `${summary.mover.changePct.toFixed(2)}%` : '—'}</div>
-              </div>
-              <div className="summary-card">
-                <div className="summary-label">آخرین timestamp داده</div>
-                <div className="summary-value">{faDateTime(dashboard?.ts || Date.now())}</div>
-                <div className="summary-meta">clock synced with cache</div>
-              </div>
-            </div>
-
-            <div className="toolbar">
-              <input
-                className="mini-input"
-                placeholder="جستجو: طلا، BTC، EUR..."
-                value={marketQuery}
-                onChange={(event) => setMarketQuery(event.target.value)}
-              />
-              <select className="mini-select" value={marketType} onChange={(event) => setMarketType(event.target.value)}>
-                <option value="all">همه بازارها</option>
-                <option value="fx">فارکس</option>
-                <option value="metal">فلزات</option>
-                <option value="crypto">کریپتو</option>
-              </select>
-              <select className="mini-select" value={marketSort} onChange={(event) => setMarketSort(event.target.value)}>
-                <option value="default">پیش‌فرض</option>
-                <option value="change-desc">بیشترین رشد</option>
-                <option value="change-asc">بیشترین افت</option>
-                <option value="price-desc">بیشترین قیمت</option>
-                <option value="alpha">الفبایی</option>
-              </select>
-              <label className="toggle-pill">
-                <input type="checkbox" checked={onlyFavs} onChange={(event) => setOnlyFavs(event.target.checked)} />
-                فقط منتخب‌ها
-              </label>
-            </div>
-
-            <div className="card-grid">
-              {visibleMarkets.map((item) => (
-                <article key={item.id} className={`market-card ${favorites.includes(item.id) ? 'favorite' : ''}`}>
-                  <div className="card-head">
-                    <div>
-                      <div className="card-name">{item.name}</div>
-                      <div className="card-symbol">{item.symbol}</div>
-                    </div>
-                    <div className="card-actions">
-                      <span className={`tag ${item.analysis?.tone === 'up' ? 'tag-buy' : item.analysis?.tone === 'down' ? 'tag-sell' : 'tag-low'}`}>
-                        {item.analysis?.label || 'داده کم'}
-                      </span>
-                      <button className={`fav-btn ${favorites.includes(item.id) ? 'active' : ''}`} onClick={() => toggleFavorite(item.id)}>
-                        ★
-                      </button>
-                    </div>
-                  </div>
-                  <div className="card-price" dir="ltr">{fmt(item.price, item.decimals)}</div>
-                  <div className={`card-change ${item.change >= 0 ? 'up' : 'down'}`} dir="ltr">
-                    {item.change >= 0 ? '▲' : '▼'} {fmt(Math.abs(item.change), item.decimals)} ({item.changePct.toFixed(2)}%)
-                  </div>
-                  <div className="spark-wrap">
-                    <svg viewBox={`0 0 ${item.spark.width} ${item.spark.height}`} preserveAspectRatio="none">
-                      <path
-                        d={`${item.spark.path} L${item.spark.width - item.spark.pad},${item.spark.height - item.spark.pad} L${item.spark.pad},${item.spark.height - item.spark.pad} Z`}
-                        fill={item.spark.color}
-                        opacity="0.11"
-                      />
-                      <path d={item.spark.path} fill="none" stroke={item.spark.color} strokeWidth="2" />
-                    </svg>
-                  </div>
-                  <div className="chip-row top-gap-tight">
-                    <span className="tag tag-low">RSI {item.analysis?.rsi?.toFixed(1) || '—'}</span>
-                    <span className="tag tag-low">منبع: {item.source}</span>
-                  </div>
-                </article>
-              ))}
+              <div className="summary-card"><div className="summary-label">نمادهای قابل مشاهده</div><div className="summary-value">{fa(visibleMarkets.length)}</div><div className="summary-meta">{fa(favorites.length)} منتخب</div></div>
+              <div className="summary-card"><div className="summary-label">جهت بازار</div><div className="summary-value">{fa(summary.rising)} / {fa(summary.falling)}</div><div className="summary-meta">صعودی / نزولی</div></div>
+              <div className="summary-card"><div className="summary-label">بیشترین نوسان</div><div className={`summary-value ${summary.mover?.changePct >= 0 ? 'up' : 'down'}`}>{summary.mover?.symbol || '—'}</div><div className="summary-meta">{summary.mover ? `${summary.mover.changePct.toFixed(2)}%` : '—'}</div></div>
+              <div className="summary-card"><div className="summary-label">آخرین timestamp</div><div className="summary-value smallish">{faDateTime(dashboard?.ts || Date.now())}</div><div className="summary-meta">داده از cache یا Worker</div></div>
             </div>
           </section>
-        )}
+        ) : null}
 
         {tab === 'alerts' && (
           <section>
-            <div className="section-title">هشدارهای زنده</div>
+            <div className="section-title">هشدارها</div>
             <div className="toolbar">
               <select className="mini-select" value={alertSeverity} onChange={(event) => setAlertSeverity(event.target.value)}>
                 <option value="all">همه سطح‌ها</option>
@@ -746,11 +774,12 @@ export default function App() {
               </select>
               <select className="mini-select" value={alertAsset} onChange={(event) => setAlertAsset(event.target.value)}>
                 <option value="all">همه نمادها</option>
-                {marketRows.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} — {item.symbol}
-                  </option>
-                ))}
+                {marketRows.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.symbol}</option>)}
+              </select>
+              <select className="mini-select" value={alertOrder} onChange={(event) => setAlertOrder(event.target.value)}>
+                <option value="newest">جدیدترین</option>
+                <option value="oldest">قدیمی‌ترین</option>
+                <option value="critical-first">بحرانی اول</option>
               </select>
               <span className="badge">بحرانی: {fa(alertSummary.critical)} · هشدار: {fa(alertSummary.warning)} · اطلاع: {fa(alertSummary.info)}</span>
             </div>
@@ -763,18 +792,12 @@ export default function App() {
                       <div className="summary-meta">{item.message}</div>
                     </div>
                     <div className="card-actions">
-                      <span className={`tag ${severityMap[item.severity]?.[1] || 'tag-low'}`}>
-                        {severityMap[item.severity]?.[0] || 'اطلاع'}
-                      </span>
+                      <span className={`tag ${severityMap[item.severity]?.[1] || 'tag-low'}`}>{severityMap[item.severity]?.[0] || 'اطلاع'}</span>
                       <span className="tag tag-low">{faDateTime(item.eventTime || item.createdAt)}</span>
                     </div>
                   </div>
                   <div className="chip-row top-gap-tight">
-                    {item.assetIds.map((id) => (
-                      <span key={id} className="tag tag-low">
-                        {instrumentMeta[id]?.symbol || id}
-                      </span>
-                    ))}
+                    {item.assetIds.map((id) => <span key={id} className="tag tag-low">{instrumentMeta[id]?.symbol || id}</span>)}
                     {item.country ? <span className="tag tag-low">{countryMap[item.country] || item.country}</span> : null}
                     {item.source ? <span className="tag tag-low">{item.source}</span> : null}
                   </div>
@@ -786,7 +809,7 @@ export default function App() {
 
         {tab === 'news' && (
           <section>
-            <div className="section-title">اخبار بازار</div>
+            <div className="section-title">اخبار</div>
             <div className="toolbar">
               <select className="mini-select" value={newsImpact} onChange={(event) => setNewsImpact(event.target.value)}>
                 <option value="all">همه خبرها</option>
@@ -796,13 +819,15 @@ export default function App() {
               </select>
               <select className="mini-select" value={newsAsset} onChange={(event) => setNewsAsset(event.target.value)}>
                 <option value="all">همه نمادها</option>
-                {marketRows.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} — {item.symbol}
-                  </option>
-                ))}
+                {marketRows.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.symbol}</option>)}
               </select>
-              <span className="badge">منابع RSS + Worker normalization</span>
+              <select className="mini-select" value={newsOrder} onChange={(event) => setNewsOrder(event.target.value)}>
+                <option value="newest">جدیدترین</option>
+                <option value="oldest">قدیمی‌ترین</option>
+                <option value="unseen-first">خوانده‌نشده اول</option>
+              </select>
+              <button className="icon-btn wide-btn" onClick={() => setNewsSeen([])}>همه را جدید کن</button>
+              <button className="icon-btn wide-btn" onClick={markAllNewsSeen}>همه را خوانده‌شده کن</button>
             </div>
             <div className="news-list">
               {filteredNews.map((item) => (
@@ -812,25 +837,15 @@ export default function App() {
                     <div className="news-exact">{faDateTime(item.date)}</div>
                   </div>
                   <div className="news-body">
-                    <div className="news-title">
-                      <a href={item.link} target="_blank" rel="noreferrer">
-                        {item.title} ↗
-                      </a>
-                    </div>
+                    <div className="news-title"><a href={item.link} target="_blank" rel="noreferrer">{item.title} ↗</a></div>
                     <div className="news-src">{item.source} · {item.topic}</div>
                     <div className="chip-row">
-                      {item.targets.map((id) => (
-                        <span key={id} className="tag tag-low">
-                          {instrumentMeta[id]?.symbol || id}
-                        </span>
-                      ))}
+                      {item.targets.map((id) => <span key={id} className="tag tag-low">{instrumentMeta[id]?.symbol || id}</span>)}
                     </div>
                   </div>
                   <div className="news-side">
                     <span className={`tag ${impactMap[item.impact]?.[1] || 'tag-low'}`}>{impactMap[item.impact]?.[0] || 'عادی'}</span>
-                    <span className={`tag ${item.sentiment === 'pos' ? 'tag-buy' : item.sentiment === 'neg' ? 'tag-sell' : 'tag-low'}`}>
-                      {item.sentiment === 'pos' ? 'صعودی' : item.sentiment === 'neg' ? 'نزولی' : 'خنثی'}
-                    </span>
+                    <span className={`tag ${item.sentiment === 'pos' ? 'tag-buy' : item.sentiment === 'neg' ? 'tag-sell' : 'tag-low'}`}>{item.sentiment === 'pos' ? 'صعودی' : item.sentiment === 'neg' ? 'نزولی' : 'خنثی'}</span>
                   </div>
                 </article>
               ))}
@@ -840,7 +855,7 @@ export default function App() {
 
         {tab === 'calendar' && (
           <section>
-            <div className="section-title">تقویم اقتصادی</div>
+            <div className="section-title">تقویم</div>
             <div className="toolbar">
               <select className="mini-select" value={calImpact} onChange={(event) => setCalImpact(event.target.value)}>
                 <option value="all">همه رویدادها</option>
@@ -850,13 +865,12 @@ export default function App() {
               </select>
               <select className="mini-select" value={calCountry} onChange={(event) => setCalCountry(event.target.value)}>
                 <option value="all">همه کشورها</option>
-                {Object.entries(countryMap).map(([code, label]) => (
-                  <option key={code} value={code}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(countryMap).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
               </select>
-              <span className="badge">آخرین تقویم هفتگی Forex Factory / Fair Economy</span>
+              <select className="mini-select" value={calendarOrder} onChange={(event) => setCalendarOrder(event.target.value)}>
+                <option value="upcoming">زودترها اول</option>
+                <option value="latest">دیرترها اول</option>
+              </select>
             </div>
             <div className="calendar-list">
               {filteredCalendar.map((item) => (
@@ -876,24 +890,18 @@ export default function App() {
 
         {tab === 'setups' && (
           <section>
-            <div className="section-title">ستاپ‌های ترکیبی</div>
+            <div className="section-title">ستاپ‌ها</div>
             <div className="toolbar">
-              {Object.entries(horizonMap).map(([key, value]) => (
-                <button key={key} className={`tf-btn ${horizon === key ? 'active' : ''}`} onClick={() => setHorizon(key)}>
-                  {value[0]}
-                </button>
-              ))}
+              {Object.entries(horizonMap).map(([key, value]) => <button key={key} className={`tf-btn ${horizon === key ? 'active' : ''}`} onClick={() => setHorizon(key)}>{value[0]}</button>)}
             </div>
-            <div className="hero-note section-gap">
-              این بخش حالا از داده واقعی Worker و JSON کش استفاده می‌کند. یعنی score تکنیکال + sentiment خبر + جریمه‌ی خبر مهم نزدیک، با هم ستاپ می‌سازند.
-            </div>
+            <div className="hero-note section-gap">در این نسخه، با تغییر horizon، داده سری استفاده‌شده هم عوض می‌شود: کوتاه‌مدت = 15m، میان‌مدت = 1h، بلندمدت = 1d. بنابراین ستاپ‌ها دیگر کاملاً ثابت نمی‌مانند.</div>
             <div className="stack-list">
-              {setups.map(({ item, risk, setup }) => (
+              {setups.map(({ item, risk, setup, frameKey }) => (
                 <div key={item.id} className="setup-card">
                   <div className="row-between wrap-gap">
                     <div>
                       <div className="pred-title">{item.name} <span className="summary-meta">({item.symbol})</span></div>
-                      <div className="summary-meta">{horizonMap[horizon][0]}</div>
+                      <div className="summary-meta">{horizonMap[horizon][0]} · داده {frameKey}</div>
                     </div>
                     <div className="card-actions">
                       <span className={`tag ${setup?.side === 'buy' ? 'tag-buy' : setup?.side === 'sell' ? 'tag-sell' : 'tag-low'}`}>{setup?.title}</span>
@@ -921,42 +929,56 @@ export default function App() {
 
         {tab === 'plan' && (
           <section>
-            <div className="section-title">پلن فنی و وضعیت مهاجرت</div>
+            <div className="section-title">پلن فنی</div>
             <div className="stack-list">
               <div className="panel-card">
-                <div className="pred-title">وضعیت فعلی</div>
+                <div className="pred-title">الان چرا بعضی چیزها قبلاً ثابت بودند؟</div>
                 <ul className="feature-list">
-                  <li>فرانت‌اند React به Worker و `data/prices.json` وصل شد.</li>
-                  <li>حالت protected و public هر دو پشتیبانی می‌شوند.</li>
-                  <li>تب هشدارها اکنون از `alerts` و `alertSummary` واقعی استفاده می‌کند.</li>
-                  <li>ستاپ‌ها از داده واقعی بازار + خبر + تقویم ساخته می‌شوند.</li>
+                  <li>اگر GitHub Pages دوباره deploy نشود، `prices.json` همان snapshot قبلی می‌ماند.</li>
+                  <li>اگر کش مرورگر/Pages شکسته نشود، refresh ظاهری کافی نیست.</li>
+                  <li>اگر ستاپ‌ها از یک سری مشترک ساخته شوند، horizon فرق ظاهری دارد ولی محتوایی کم تغییر می‌کند.</li>
                 </ul>
               </div>
               <div className="panel-card">
-                <div className="pred-title">Provider status از آخرین build</div>
+                <div className="pred-title">کدام تکنولوژی‌ها را توصیه می‌کنم؟</div>
+                <ul className="feature-list">
+                  <li><b>Tailwind:</b> خوب است، ولی الان اجباری نیست. وقتی UI پایدار شد اگر خواستی migrate می‌کنیم.</li>
+                  <li><b>Next.js:</b> برای فاز بعد و اگر بخواهی به Cloudflare Pages/SSR بروی مفید است. برای GitHub Pages فعلی ضروری نیست.</li>
+                  <li><b>PWA:</b> مفید است؛ بعد از تثبیت UI اضافه‌اش می‌کنیم.</li>
+                  <li><b>RSS:</b> همین الان هم داریم؛ بعداً منابع معتبرتر را بیشتر می‌کنیم.</li>
+                  <li><b>jQuery:</b> پیشنهاد نمی‌کنم چون پروژه React است.</li>
+                  <li><b>core-js / priority hints:</b> فقط اگر نیاز واقعی مرورگر/عملکرد داشته باشیم اضافه می‌کنیم.</li>
+                </ul>
+              </div>
+              <div className="panel-card">
+                <div className="pred-title">بعداً برای ارتقا کدام فایل‌ها را باید عوض کنی؟</div>
+                <ul className="feature-list">
+                  <li><b>UI اصلی:</b> `src/App.jsx`</li>
+                  <li><b>استایل‌ها:</b> `src/styles.css`</li>
+                  <li><b>محاسبات تحلیل/ستاپ:</b> `src/lib/analysis.js`</li>
+                  <li><b>فرمت تاریخ و اعداد:</b> `src/lib/format.js`</li>
+                  <li><b>جمع‌آوری قیمت و خبر:</b> `scripts/fetch-prices.mjs`</li>
+                  <li><b>منطق هشدار:</b> `shared/market-intel.js`</li>
+                  <li><b>ورکر امنیت و API:</b> `worker/src/index.js` و نسخه Dashboard یعنی `worker/cloudflare-dashboard-worker.js`</li>
+                  <li><b>استقرار سایت:</b> `.github/workflows/deploy-pages.yml`</li>
+                </ul>
+              </div>
+              <div className="panel-card">
+                <div className="pred-title">وضعیت providerها</div>
                 <div className="provider-list">
-                  {providerRows.length ? providerRows.map(([key, value]) => (
+                  {providerRows.map(([key, value]) => (
                     <div key={key} className="provider-row">
                       <div>
                         <b>{instrumentMeta[key]?.symbol || key}</b>
-                        <div className="summary-meta">{value.provider || 'fallback نامشخص'}</div>
+                        <div className="summary-meta">{value.provider || 'fallback'}</div>
                       </div>
                       <div className="chip-row">
                         <span className={`tag ${value.ok ? 'tag-buy' : 'tag-sell'}`}>{value.ok ? 'OK' : 'Fail'}</span>
                         <span className="tag tag-low">{(value.tried || []).slice(0, 2).join(' | ') || '—'}</span>
                       </div>
                     </div>
-                  )) : <div className="hero-note">اطلاعات provider در این build موجود نیست.</div>}
+                  ))}
                 </div>
-              </div>
-              <div className="panel-card">
-                <div className="pred-title">قدم‌های بعدی پیشنهادی</div>
-                <ul className="feature-list">
-                  <li>Telegram dispatch را به Worker یا GitHub Action اضافه کنیم.</li>
-                  <li>برای خبرهای noisy فیلتر دقیق‌تری اضافه کنیم.</li>
-                  <li>در صورت تمایل، نمودارهای بزرگ‌تر و candlestick اضافه کنیم.</li>
-                  <li>اگر خواستی، مرحله بعدی من می‌تواند «ارسال هشدار تلگرام + بهبود React UI» باشد.</li>
-                </ul>
               </div>
             </div>
           </section>
