@@ -977,3 +977,23 @@ body {
 .pred-title {
   overflow-wrap: anywhere;
 }
+
+.scroll-top-btn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 40;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(59, 130, 246, 0.32);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.92);
+  color: white;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.28);
+  cursor: pointer;
+  font-size: 22px;
+}
+
+.scroll-top-btn:hover {
+  transform: translateY(-2px);
+}
