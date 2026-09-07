@@ -47,6 +47,42 @@ const SYMBOLS = {
     yahoo: 'BTC-USD',
     providers: ['binance', 'coinbase', 'coingecko', 'yahoo'],
   },
+  dxy: {
+    label: 'US Dollar Index',
+    decimals: 2,
+    yahoo: 'DX-Y.NYB',
+    providers: ['yahoo'],
+  },
+  dji: {
+    label: 'Dow Jones Industrial Average',
+    decimals: 2,
+    yahoo: '^DJI',
+    providers: ['yahoo'],
+  },
+  gspc: {
+    label: 'S&P 500',
+    decimals: 2,
+    yahoo: '^GSPC',
+    providers: ['yahoo'],
+  },
+  ixic: {
+    label: 'Nasdaq Composite',
+    decimals: 2,
+    yahoo: '^IXIC',
+    providers: ['yahoo'],
+  },
+  rut: {
+    label: 'Russell 2000',
+    decimals: 2,
+    yahoo: '^RUT',
+    providers: ['yahoo'],
+  },
+  vix: {
+    label: 'VIX',
+    decimals: 2,
+    yahoo: '^VIX',
+    providers: ['yahoo'],
+  },
 };
 
 const FRAMES = {
@@ -424,7 +460,7 @@ async function main() {
     ts: Date.now(),
     meta: {
       version: '2.0.0',
-      focus: ['forex', 'gold', 'bitcoin'],
+      focus: ['forex', 'gold', 'bitcoin', 'indices'],
       providerStatus,
     },
     inst,
@@ -444,4 +480,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-
