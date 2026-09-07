@@ -1,25 +1,51 @@
 const COUNTRY_TO_ASSETS = {
-  USD: ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'],
-  EUR: ['eurusd'],
-  GBP: ['gbpusd'],
-  JPY: ['usdjpy'],
+  USD: ['gold', 'silver', 'wti', 'brent', 'natgas', 'eurusd', 'gbpusd', 'usdjpy', 'audusd', 'usdcad', 'usdchf', 'btc', 'eth', 'sol', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'],
+  EUR: ['eurusd', 'dax', 'cac', 'stoxx'],
+  GBP: ['gbpusd', 'ftse'],
+  JPY: ['usdjpy', 'nikkei'],
+  AUD: ['audusd'],
+  CAD: ['usdcad'],
+  CHF: ['usdchf'],
+  CNY: ['hsi', 'shcomp'],
+  BRL: ['bvsp'],
+  MXN: ['mxx'],
   XAU: ['gold'],
+  XAG: ['silver'],
   BTC: ['btc'],
-  All: ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'],
+  ETH: ['eth'],
+  All: ['gold', 'silver', 'wti', 'brent', 'natgas', 'eurusd', 'gbpusd', 'usdjpy', 'audusd', 'usdcad', 'usdchf', 'btc', 'eth', 'sol', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix', 'ftse', 'dax', 'cac', 'stoxx', 'nikkei', 'hsi', 'shcomp', 'bvsp', 'mxx'],
 };
 
 const ASSET_META = {
   gold: { label: 'Gold', symbol: 'XAU/USD', type: 'metal', move: 1.4, strongMove: 2.4 },
+  silver: { label: 'Silver', symbol: 'XAG/USD', type: 'metal', move: 1.9, strongMove: 3.2 },
+  wti: { label: 'WTI Crude Oil', symbol: 'WTI', type: 'commodity', move: 1.4, strongMove: 2.5 },
+  brent: { label: 'Brent Crude', symbol: 'Brent', type: 'commodity', move: 1.3, strongMove: 2.3 },
+  natgas: { label: 'Natural Gas', symbol: 'NG', type: 'commodity', move: 2.4, strongMove: 4.5 },
   eurusd: { label: 'EUR/USD', symbol: 'EUR/USD', type: 'fx', move: 0.55, strongMove: 0.9 },
   gbpusd: { label: 'GBP/USD', symbol: 'GBP/USD', type: 'fx', move: 0.65, strongMove: 1.0 },
   usdjpy: { label: 'USD/JPY', symbol: 'USD/JPY', type: 'fx', move: 0.65, strongMove: 1.0 },
+  audusd: { label: 'AUD/USD', symbol: 'AUD/USD', type: 'fx', move: 0.6, strongMove: 1.0 },
+  usdcad: { label: 'USD/CAD', symbol: 'USD/CAD', type: 'fx', move: 0.6, strongMove: 1.0 },
+  usdchf: { label: 'USD/CHF', symbol: 'USD/CHF', type: 'fx', move: 0.55, strongMove: 0.95 },
   btc: { label: 'Bitcoin', symbol: 'BTC/USD', type: 'crypto', move: 4.5, strongMove: 7.5 },
+  eth: { label: 'Ethereum', symbol: 'ETH/USD', type: 'crypto', move: 5.0, strongMove: 8.0 },
+  sol: { label: 'Solana', symbol: 'SOL/USD', type: 'crypto', move: 6.0, strongMove: 10.0 },
   dxy: { label: 'DXY', symbol: 'DXY', type: 'index', move: 0.4, strongMove: 0.8 },
   dji: { label: 'Dow Jones', symbol: 'DJI', type: 'index', move: 0.8, strongMove: 1.5 },
   gspc: { label: 'S&P 500', symbol: 'SPX', type: 'index', move: 0.8, strongMove: 1.4 },
   ixic: { label: 'Nasdaq Composite', symbol: 'IXIC', type: 'index', move: 1.0, strongMove: 1.8 },
   rut: { label: 'Russell 2000', symbol: 'RUT', type: 'index', move: 1.0, strongMove: 1.8 },
   vix: { label: 'VIX', symbol: 'VIX', type: 'volatility', move: 5.0, strongMove: 10.0 },
+  ftse: { label: 'FTSE 100', symbol: 'FTSE 100', type: 'index', move: 0.8, strongMove: 1.5 },
+  dax: { label: 'DAX', symbol: 'DAX', type: 'index', move: 0.9, strongMove: 1.6 },
+  cac: { label: 'CAC 40', symbol: 'CAC 40', type: 'index', move: 0.9, strongMove: 1.5 },
+  stoxx: { label: 'Euro Stoxx 50', symbol: 'SX5E', type: 'index', move: 0.9, strongMove: 1.5 },
+  nikkei: { label: 'Nikkei 225', symbol: 'N225', type: 'index', move: 1.0, strongMove: 1.8 },
+  hsi: { label: 'Hang Seng', symbol: 'HSI', type: 'index', move: 1.1, strongMove: 2.0 },
+  shcomp: { label: 'Shanghai Composite', symbol: 'SSE', type: 'index', move: 0.9, strongMove: 1.6 },
+  bvsp: { label: 'Ibovespa', symbol: 'IBOV', type: 'index', move: 1.1, strongMove: 2.0 },
+  mxx: { label: 'S&P/BMV IPC', symbol: 'MXX', type: 'index', move: 1.0, strongMove: 1.8 },
 };
 
 const severityRank = { critical: 0, warning: 1, info: 2 };
@@ -37,20 +63,38 @@ export function inferTargetsFromText(text = '') {
   const value = String(text).toLowerCase();
   const set = new Set();
 
-  if (/(gold|xau|bullion|silver|metals?)/i.test(value)) set.add('gold');
-  if (/(bitcoin|btc|crypto|etf|coinbase|binance|stablecoin|solana|ethereum)/i.test(value)) set.add('btc');
+  if (/(gold|xau|bullion)/i.test(value)) set.add('gold');
+  if (/(silver|xag)/i.test(value)) set.add('silver');
+  if (/(wti|crude oil|oil prices|opec|west texas)/i.test(value)) set.add('wti');
+  if (/(brent)/i.test(value)) set.add('brent');
+  if (/(natural gas|nat gas|lng)/i.test(value)) set.add('natgas');
+  if (/(bitcoin|btc|crypto|etf|coinbase|binance|stablecoin)/i.test(value)) set.add('btc');
+  if (/(ethereum|eth)/i.test(value)) set.add('eth');
+  if (/(solana|sol)/i.test(value)) set.add('sol');
   if (/(eur\/usd|eurusd|euro|ecb|germany|eurozone)/i.test(value)) set.add('eurusd');
   if (/(gbp\/usd|gbpusd|pound|sterling|boe|uk |british )/i.test(value)) set.add('gbpusd');
   if (/(usd\/jpy|usdjpy|yen|boj|japan)/i.test(value)) set.add('usdjpy');
+  if (/(aud\/usd|audusd|australian dollar|rba|australia)/i.test(value)) set.add('audusd');
+  if (/(usd\/cad|usdcad|canadian dollar|boc|canada)/i.test(value)) set.add('usdcad');
+  if (/(usd\/chf|usdchf|swiss franc|snb|switzerland)/i.test(value)) set.add('usdchf');
   if (/(dxy|dollar index|ice dollar)/i.test(value)) set.add('dxy');
   if (/(dow jones|dow |\^dji|djia)/i.test(value)) set.add('dji');
   if (/(s&p 500|sp500|\^gspc|standard and poor)/i.test(value)) set.add('gspc');
-  if (/(nasdaq|\^ixic|composite)/i.test(value)) set.add('ixic');
+  if (/(nasdaq|\^ixic)/i.test(value)) set.add('ixic');
   if (/(russell 2000|\^rut|small cap)/i.test(value)) set.add('rut');
   if (/(vix|fear index|volatility index)/i.test(value)) set.add('vix');
+  if (/(ftse|london stocks|ukx)/i.test(value)) set.add('ftse');
+  if (/(dax|germany stocks|frankfurt equities)/i.test(value)) set.add('dax');
+  if (/(cac 40|paris stocks|french equities)/i.test(value)) set.add('cac');
+  if (/(euro stoxx|stoxx 50|sx5e)/i.test(value)) set.add('stoxx');
+  if (/(nikkei|\^n225|tokyo stocks)/i.test(value)) set.add('nikkei');
+  if (/(hang seng|\^hsi|hong kong stocks)/i.test(value)) set.add('hsi');
+  if (/(shanghai composite|china stocks|sse composite)/i.test(value)) set.add('shcomp');
+  if (/(ibovespa|bovespa|brazil stocks)/i.test(value)) set.add('bvsp');
+  if (/(bmv ipc|mexico stocks|\^mxx)/i.test(value)) set.add('mxx');
 
   if (/(fed|fomc|powell|warsh|jackson hole|cpi|pce|payroll|nfp|jobs|inflation|treasury|dollar)/i.test(value)) {
-    ['gold', 'eurusd', 'gbpusd', 'usdjpy', 'btc', 'dxy', 'dji', 'gspc', 'ixic', 'rut', 'vix'].forEach((asset) => set.add(asset));
+    Object.keys(ASSET_META).forEach((asset) => set.add(asset));
   }
 
   return [...set];
