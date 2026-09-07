@@ -3,7 +3,7 @@ name: deploy-react-site
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '7,17,27,37,47,57 * * * *'
   push:
     branches:
       - main
@@ -26,7 +26,7 @@ permissions:
 
 concurrency:
   group: pages-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
