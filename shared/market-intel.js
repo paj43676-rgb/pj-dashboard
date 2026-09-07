@@ -9,15 +9,15 @@ const COUNTRY_TO_ASSETS = {
 };
 
 const ASSET_META = {
-  gold: { label: 'طلا', symbol: 'XAU/USD', type: 'metal', move: 1.4, strongMove: 2.4 },
-  eurusd: { label: 'یورو/دلار', symbol: 'EUR/USD', type: 'fx', move: 0.55, strongMove: 0.9 },
-  gbpusd: { label: 'پوند/دلار', symbol: 'GBP/USD', type: 'fx', move: 0.65, strongMove: 1.0 },
-  usdjpy: { label: 'دلار/ین', symbol: 'USD/JPY', type: 'fx', move: 0.65, strongMove: 1.0 },
-  btc: { label: 'بیت‌کوین', symbol: 'BTC/USD', type: 'crypto', move: 4.5, strongMove: 7.5 },
-  dxy: { label: 'شاخص دلار', symbol: 'DXY', type: 'index', move: 0.4, strongMove: 0.8 },
-  dji: { label: 'داوجونز', symbol: 'DJI', type: 'index', move: 0.8, strongMove: 1.5 },
+  gold: { label: 'Gold', symbol: 'XAU/USD', type: 'metal', move: 1.4, strongMove: 2.4 },
+  eurusd: { label: 'EUR/USD', symbol: 'EUR/USD', type: 'fx', move: 0.55, strongMove: 0.9 },
+  gbpusd: { label: 'GBP/USD', symbol: 'GBP/USD', type: 'fx', move: 0.65, strongMove: 1.0 },
+  usdjpy: { label: 'USD/JPY', symbol: 'USD/JPY', type: 'fx', move: 0.65, strongMove: 1.0 },
+  btc: { label: 'Bitcoin', symbol: 'BTC/USD', type: 'crypto', move: 4.5, strongMove: 7.5 },
+  dxy: { label: 'DXY', symbol: 'DXY', type: 'index', move: 0.4, strongMove: 0.8 },
+  dji: { label: 'Dow Jones', symbol: 'DJI', type: 'index', move: 0.8, strongMove: 1.5 },
   gspc: { label: 'S&P 500', symbol: 'SPX', type: 'index', move: 0.8, strongMove: 1.4 },
-  ixic: { label: 'Nasdaq', symbol: 'IXIC', type: 'index', move: 1.0, strongMove: 1.8 },
+  ixic: { label: 'Nasdaq Composite', symbol: 'IXIC', type: 'index', move: 1.0, strongMove: 1.8 },
   rut: { label: 'Russell 2000', symbol: 'RUT', type: 'index', move: 1.0, strongMove: 1.8 },
   vix: { label: 'VIX', symbol: 'VIX', type: 'volatility', move: 5.0, strongMove: 10.0 },
 };
