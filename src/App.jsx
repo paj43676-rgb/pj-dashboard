@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { analyze, buildSetup } from './lib/analysis';
-import { ago, fa, faDateTime, fmt } from './lib/format';
+import { ago, fa, faClock, faDateTime, fmt, stalenessText, timeUntil } from './lib/format';
+import { buildAlertFeed } from '../shared/market-intel.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const REFRESH_MS = 60 * 1000;
@@ -253,7 +254,8 @@ export default function App() {
   const [alertAsset, setAlertAsset] = useState('all');
   const [alertOrder, setAlertOrder] = useState('newest');
   const [horizon, setHorizon] = useState('s');
-  const [clock, setClock] = useState(() => new Date().toLocaleTimeString('en-GB'));
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  const [clock, setClock] = useState(() => faClock(Date.now()));
   const [dashboard, setDashboard] = useState(null);
   const [state, setState] = useState({
     loading: true,
@@ -282,7 +284,14 @@ export default function App() {
   }, [selectedFrame]);
 
   useEffect(() => {
-    const timer = setInterval(() => setClock(new Date().toLocaleTimeString('en-GB')), 1000);
+    const timer = setInterval(() => setClock(faClock(Date.now())), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const tick = () => setNowTs(Date.now());
+    tick();
+    const timer = setInterval(tick, 30_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -386,7 +395,8 @@ export default function App() {
 
   const newsRows = useMemo(() => (dashboard?.news || []).map(normalizeNewsItem), [dashboard]);
   const calendarRows = useMemo(() => (dashboard?.cal || []).map(normalizeCalendarItem), [dashboard]);
-  const alertsRows = useMemo(() => (dashboard?.alerts || []).map(normalizeAlertItem), [dashboard]);
+  const liveAlertFeed = useMemo(() => buildAlertFeed({ inst: dashboard?.inst || {}, news: dashboard?.news || [], cal: dashboard?.cal || [] }, nowTs), [dashboard, nowTs]);
+  const alertsRows = useMemo(() => (liveAlertFeed.items || []).map(normalizeAlertItem), [liveAlertFeed]);
 
   useEffect(() => {
     storeSet('rfx_news_seen', newsSeen);
@@ -498,15 +508,11 @@ export default function App() {
       .sort((a, b) => (b.setup?.combo || 0) - (a.setup?.combo || 0));
   }, [calendarRows, horizon, marketRows, newsRows]);
 
-  const alertSummary = useMemo(() => {
-    const incoming = dashboard?.alertSummary;
-    if (incoming) return incoming;
-    return {
-      critical: alertsRows.filter((item) => item.severity === 'critical').length,
-      warning: alertsRows.filter((item) => item.severity === 'warning').length,
-      info: alertsRows.filter((item) => item.severity === 'info').length,
-    };
-  }, [alertsRows, dashboard]);
+  const alertSummary = useMemo(() => ({
+    critical: alertsRows.filter((item) => item.severity === 'critical').length,
+    warning: alertsRows.filter((item) => item.severity === 'warning').length,
+    info: alertsRows.filter((item) => item.severity === 'info').length,
+  }), [alertsRows]);
 
   const providerRows = useMemo(() => Object.entries(dashboard?.meta?.providerStatus || {}), [dashboard]);
   const newsBadge = useMemo(() => computeNewsBadge(newsRows, newsSeen), [newsRows, newsSeen]);
@@ -551,6 +557,9 @@ export default function App() {
   };
 
   const sourceLabel = state.sourceMode === 'protected' ? 'نسخه محافظت‌شده Worker' : state.sourceMode === 'public' ? 'نسخه عمومی cache' : 'در حال اتصال';
+  const dataTimestamp = dashboard?.ts || 0;
+  const dataStaleness = stalenessText(dataTimestamp, nowTs);
+  const dataIsStale = dataTimestamp ? nowTs - dataTimestamp > 15 * 60 * 1000 : false;
 
   if (state.loading && !dashboard) {
     return (
@@ -583,7 +592,7 @@ export default function App() {
         <header className="page-header">
           <div>
             <h1>داشبورد بازارها</h1>
-            <div className="subtext">{sourceLabel} · آخرین بارگیری: {faDateTime(state.lastLoaded || dashboard?.ts || Date.now())} · ساعت: {clock}</div>
+            <div className="subtext">{sourceLabel} · آخرین snapshot: <span className="ltr-text">{faDateTime(dataTimestamp || state.lastLoaded || nowTs)}</span> · {dataStaleness} · ساعت تهران: <span className="ltr-text">{clock}</span></div>
           </div>
           <div className="header-actions wrap-gap">
             <span className={`live-badge ${state.sourceMode === 'public' ? 'badge-soft' : ''}`}>{state.sourceMode === 'protected' ? 'Protected' : 'Public cache'}</span>
@@ -594,6 +603,7 @@ export default function App() {
         </header>
 
         {state.error ? <div className="error-banner"><b>توجه:</b> {state.error}</div> : null}
+        {dataIsStale ? <div className="warn-banner"><b>داده قدیمی شده:</b> {dataStaleness}. اگر این وضعیت طولانی ماند، باید deploy-pages در GitHub دوباره اجرا شود.</div> : null}
 
         {criticalAlerts.length ? (
           <div className="critical-strip">
@@ -638,7 +648,7 @@ export default function App() {
                 <div className="quote-header">
                   <div>
                     <div className="quote-name">{selectedInstrument.name}</div>
-                    <div className="quote-symbol">{selectedInstrument.symbol} · {selectedInstrument.source}</div>
+                    <div className="quote-symbol mixed-text"><span className="ltr-text">{selectedInstrument.symbol}</span> · <span className="ltr-text">{selectedInstrument.source}</span></div>
                   </div>
                   <div className="card-actions wrap-gap">
                     <span className={`tag ${currentAnalysis?.tone === 'up' ? 'tag-buy' : currentAnalysis?.tone === 'down' ? 'tag-sell' : 'tag-low'}`}>{currentAnalysis?.label || 'داده کم'}</span>
@@ -656,10 +666,10 @@ export default function App() {
                     </div>
                   </div>
                   <div className="quote-stats">
-                    <div><span>RSI</span><b>{currentAnalysis?.rsi?.toFixed(1) || '—'}</b></div>
-                    <div><span>Low</span><b dir="ltr">{fmt(currentChart.low, selectedInstrument.decimals)}</b></div>
-                    <div><span>High</span><b dir="ltr">{fmt(currentChart.high, selectedInstrument.decimals)}</b></div>
-                    <div><span>Updated</span><b>{faDateTime(selectedInstrument.updatedAt)}</b></div>
+                    <div><span>RSI</span><b className="ltr-text">{currentAnalysis?.rsi?.toFixed(1) || '—'}</b></div>
+                    <div><span>Low</span><b className="ltr-text">{fmt(currentChart.low, selectedInstrument.decimals)}</b></div>
+                    <div><span>High</span><b className="ltr-text">{fmt(currentChart.high, selectedInstrument.decimals)}</b></div>
+                    <div><span>Updated</span><b className="ltr-text">{faDateTime(selectedInstrument.updatedAt)}</b><small>{ago(selectedInstrument.updatedAt, nowTs)}</small></div>
                   </div>
                 </div>
 
@@ -717,7 +727,7 @@ export default function App() {
                   </select>
                   <label className="toggle-pill"><input type="checkbox" checked={onlyFavs} onChange={(event) => setOnlyFavs(event.target.checked)} /> فقط منتخب‌ها</label>
                 </div>
-                <div className="watchlist-meta">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)}</div>
+                <div className="watchlist-meta">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)} · هشدار فعال: {fa(alertsRows.length)}</div>
                 <div className="watchlist-list">
                   {visibleMarkets.map((item) => (
                     <button key={item.id} className={`watchlist-item ${selectedInstrument.id === item.id ? 'active' : ''}`} onClick={() => setSelectedId(item.id)}>
@@ -741,13 +751,13 @@ export default function App() {
                   <div className="row-between wrap-gap">
                     <div>
                       <div className="pred-title">{item.name}</div>
-                      <div className="summary-meta">{item.symbol} · {frameKey}</div>
+                      <div className="summary-meta mixed-text"><span className="ltr-text">{item.symbol}</span> · <span className="ltr-text">{frameKey}</span></div>
                     </div>
                     <span className={`tag ${setup.side === 'buy' ? 'tag-buy' : setup.side === 'sell' ? 'tag-sell' : 'tag-low'}`}>{setup.title}</span>
                   </div>
                   <div className="opportunity-score">اعتماد {fa(setup.combo)}٪</div>
-                  <div className="summary-meta">ورود: {fmt(setup.entryLow, item.decimals)} — {fmt(setup.entryHigh, item.decimals)}</div>
-                  <div className="summary-meta">SL: {fmt(setup.stop, item.decimals)} | TP1: {fmt(setup.target1, item.decimals)}</div>
+                  <div className="summary-meta mixed-text">ورود: <span className="ltr-text">{fmt(setup.entryLow, item.decimals)} — {fmt(setup.entryHigh, item.decimals)}</span></div>
+                  <div className="summary-meta mixed-text">SL: <span className="ltr-text">{fmt(setup.stop, item.decimals)}</span> | TP1: <span className="ltr-text">{fmt(setup.target1, item.decimals)}</span></div>
                   <div className="summary-meta">{risk.text}</div>
                 </div>
               ))}
@@ -757,7 +767,7 @@ export default function App() {
               <div className="summary-card"><div className="summary-label">نمادهای قابل مشاهده</div><div className="summary-value">{fa(visibleMarkets.length)}</div><div className="summary-meta">{fa(favorites.length)} منتخب</div></div>
               <div className="summary-card"><div className="summary-label">جهت بازار</div><div className="summary-value">{fa(summary.rising)} / {fa(summary.falling)}</div><div className="summary-meta">صعودی / نزولی</div></div>
               <div className="summary-card"><div className="summary-label">بیشترین نوسان</div><div className={`summary-value ${summary.mover?.changePct >= 0 ? 'up' : 'down'}`}>{summary.mover?.symbol || '—'}</div><div className="summary-meta">{summary.mover ? `${summary.mover.changePct.toFixed(2)}%` : '—'}</div></div>
-              <div className="summary-card"><div className="summary-label">آخرین timestamp</div><div className="summary-value smallish">{faDateTime(dashboard?.ts || Date.now())}</div><div className="summary-meta">داده از cache یا Worker</div></div>
+              <div className="summary-card"><div className="summary-label">آخرین timestamp</div><div className="summary-value smallish ltr-text">{faDateTime(dashboard?.ts || nowTs)}</div><div className="summary-meta">{dataStaleness}</div></div>
             </div>
           </section>
         ) : null}
@@ -781,23 +791,24 @@ export default function App() {
                 <option value="oldest">قدیمی‌ترین</option>
                 <option value="critical-first">بحرانی اول</option>
               </select>
-              <span className="badge">بحرانی: {fa(alertSummary.critical)} · هشدار: {fa(alertSummary.warning)} · اطلاع: {fa(alertSummary.info)}</span>
+              <span className="badge">بحرانی: {fa(alertSummary.critical)} · هشدار: {fa(alertSummary.warning)} · اطلاع: {fa(alertSummary.info)} · فعال و زمان‌دار</span>
             </div>
             <div className="stack-list">
               {filteredAlerts.map((item) => (
                 <div key={item.key} className="alert-card">
                   <div className="row-between wrap-gap">
                     <div>
-                      <div className="pred-title">{item.title}</div>
-                      <div className="summary-meta">{item.message}</div>
+                      <div className="pred-title mixed-text">{item.title}</div>
+                      <div className="summary-meta mixed-text">{item.message}</div>
                     </div>
                     <div className="card-actions">
                       <span className={`tag ${severityMap[item.severity]?.[1] || 'tag-low'}`}>{severityMap[item.severity]?.[0] || 'اطلاع'}</span>
-                      <span className="tag tag-low">{faDateTime(item.eventTime || item.createdAt)}</span>
+                      <span className="tag tag-low ltr-text">{faDateTime(item.eventTime || item.createdAt)}</span>
+                      <span className="tag tag-low">{item.eventTime ? timeUntil(item.eventTime, nowTs) : ago(item.createdAt, nowTs)}</span>
                     </div>
                   </div>
                   <div className="chip-row top-gap-tight">
-                    {item.assetIds.map((id) => <span key={id} className="tag tag-low">{instrumentMeta[id]?.symbol || id}</span>)}
+                    {item.assetIds.map((id) => <span key={id} className="tag tag-low ltr-text">{instrumentMeta[id]?.symbol || id}</span>)}
                     {item.country ? <span className="tag tag-low">{countryMap[item.country] || item.country}</span> : null}
                     {item.source ? <span className="tag tag-low">{item.source}</span> : null}
                   </div>
@@ -837,10 +848,10 @@ export default function App() {
                     <div className="news-exact">{faDateTime(item.date)}</div>
                   </div>
                   <div className="news-body">
-                    <div className="news-title"><a href={item.link} target="_blank" rel="noreferrer">{item.title} ↗</a></div>
-                    <div className="news-src">{item.source} · {item.topic}</div>
+                    <div className="news-title mixed-text"><a href={item.link} target="_blank" rel="noreferrer">{item.title} ↗</a></div>
+                    <div className="news-src mixed-text"><span className="ltr-text">{item.source}</span> · {item.topic}</div>
                     <div className="chip-row">
-                      {item.targets.map((id) => <span key={id} className="tag tag-low">{instrumentMeta[id]?.symbol || id}</span>)}
+                      {item.targets.map((id) => <span key={id} className="tag tag-low ltr-text">{instrumentMeta[id]?.symbol || id}</span>)}
                     </div>
                   </div>
                   <div className="news-side">
@@ -875,7 +886,7 @@ export default function App() {
             <div className="calendar-list">
               {filteredCalendar.map((item) => (
                 <div key={item.id} className="calendar-row">
-                  <div><span>زمان</span>{faDateTime(item.date)}</div>
+                  <div><span>زمان</span><div className="ltr-text">{faDateTime(item.date)}</div><small>{timeUntil(item.date, nowTs)}</small></div>
                   <div><span>رویداد</span>{item.event}</div>
                   <div><span>کشور / ارز</span>{countryMap[item.country] || item.country}</div>
                   <div dir="ltr"><span>قبلی</span>{item.previous}</div>
@@ -901,7 +912,7 @@ export default function App() {
                   <div className="row-between wrap-gap">
                     <div>
                       <div className="pred-title">{item.name} <span className="summary-meta">({item.symbol})</span></div>
-                      <div className="summary-meta">{horizonMap[horizon][0]} · داده {frameKey}</div>
+                      <div className="summary-meta mixed-text">{horizonMap[horizon][0]} · داده <span className="ltr-text">{frameKey}</span></div>
                     </div>
                     <div className="card-actions">
                       <span className={`tag ${setup?.side === 'buy' ? 'tag-buy' : setup?.side === 'sell' ? 'tag-sell' : 'tag-low'}`}>{setup?.title}</span>
@@ -916,9 +927,9 @@ export default function App() {
                   </div>
                   <div className="setup-grid secondary">
                     <div className="setup-box"><div className="summary-label">تکنیکال</div><div className="summary-value">{fa(setup?.score ?? 0)}٪</div></div>
-                    <div className="setup-box"><div className="summary-label">RSI</div><div className="summary-value">{setup?.rsi?.toFixed(1) || '—'}</div></div>
+                    <div className="setup-box"><div className="summary-label">RSI</div><div className="summary-value ltr-text">{setup?.rsi?.toFixed(1) || '—'}</div></div>
                     <div className="setup-box"><div className="summary-label">ریسک خبر نزدیک</div><div className="summary-value">{risk.penalty ? 'بالا' : 'کم'}</div><div className="summary-meta">{risk.text}</div></div>
-                    <div className="setup-box"><div className="summary-label">RR هدف ۲</div><div className="summary-value">{setup?.rr2?.toFixed(2) || '—'}</div></div>
+                    <div className="setup-box"><div className="summary-label">RR هدف ۲</div><div className="summary-value ltr-text">{setup?.rr2?.toFixed(2) || '—'}</div></div>
                   </div>
                   <div className="setup-note">{setup?.note}</div>
                 </div>
