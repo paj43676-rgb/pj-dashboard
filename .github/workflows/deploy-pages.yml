@@ -2,6 +2,8 @@ name: deploy-react-site
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
   push:
     branches:
       - fx-react
