@@ -17,16 +17,34 @@ const SETUP_FRAME_BY_HORIZON = { s: 's15', m: 's1h', l: 's1d' };
 
 const instrumentMeta = {
   gold: { name: 'Gold', symbol: 'XAU/USD', type: 'metal', decimals: 2, tv: 'XAUUSD', yahoo: 'GC=F' },
+  silver: { name: 'Silver', symbol: 'XAG/USD', type: 'metal', decimals: 2, yahoo: 'SI=F' },
+  wti: { name: 'WTI Crude Oil', symbol: 'WTI', type: 'commodity', decimals: 2, yahoo: 'CL=F' },
+  brent: { name: 'Brent Crude', symbol: 'Brent', type: 'commodity', decimals: 2, yahoo: 'BZ=F' },
+  natgas: { name: 'Natural Gas', symbol: 'Nat Gas', type: 'commodity', decimals: 3, yahoo: 'NG=F' },
   eurusd: { name: 'EUR/USD', symbol: 'EUR/USD', type: 'fx', decimals: 4, tv: 'EURUSD', yahoo: 'EURUSD=X' },
   gbpusd: { name: 'GBP/USD', symbol: 'GBP/USD', type: 'fx', decimals: 4, tv: 'GBPUSD', yahoo: 'GBPUSD=X' },
   usdjpy: { name: 'USD/JPY', symbol: 'USD/JPY', type: 'fx', decimals: 3, tv: 'USDJPY', yahoo: 'USDJPY=X' },
+  audusd: { name: 'AUD/USD', symbol: 'AUD/USD', type: 'fx', decimals: 4, tv: 'AUDUSD', yahoo: 'AUDUSD=X' },
+  usdcad: { name: 'USD/CAD', symbol: 'USD/CAD', type: 'fx', decimals: 4, tv: 'USDCAD', yahoo: 'CAD=X' },
+  usdchf: { name: 'USD/CHF', symbol: 'USD/CHF', type: 'fx', decimals: 4, tv: 'USDCHF', yahoo: 'CHF=X' },
   btc: { name: 'Bitcoin', symbol: 'BTC/USD', type: 'crypto', decimals: 2, tv: 'BTCUSD', yahoo: 'BTC-USD' },
+  eth: { name: 'Ethereum', symbol: 'ETH/USD', type: 'crypto', decimals: 2, tv: 'ETHUSD', yahoo: 'ETH-USD' },
+  sol: { name: 'Solana', symbol: 'SOL/USD', type: 'crypto', decimals: 2, tv: 'SOLUSD', yahoo: 'SOL-USD' },
   dxy: { name: 'DXY', symbol: 'DXY', type: 'index', decimals: 2, tv: 'DXY', yahoo: 'DX-Y.NYB' },
-  dji: { name: 'Dow Jones', symbol: 'DJI', type: 'index', decimals: 2, tv: 'DJI', yahoo: '%5EDJI' },
-  gspc: { name: 'S&P 500', symbol: 'S&P 500', type: 'index', decimals: 2, tv: 'SPX', yahoo: '%5EGSPC' },
-  ixic: { name: 'Nasdaq Composite', symbol: 'Nasdaq Composite', type: 'index', decimals: 2, tv: 'IXIC', yahoo: '%5EIXIC' },
-  rut: { name: 'Russell 2000', symbol: 'Russell 2000', type: 'index', decimals: 2, tv: 'RUT', yahoo: '%5ERUT' },
-  vix: { name: 'VIX', symbol: 'VIX', type: 'volatility', decimals: 2, tv: 'VIX', yahoo: '%5EVIX' },
+  dji: { name: 'Dow Jones', symbol: 'DJI', type: 'index', decimals: 2, tv: 'DJI', yahoo: '^DJI' },
+  gspc: { name: 'S&P 500', symbol: 'S&P 500', type: 'index', decimals: 2, tv: 'SPX', yahoo: '^GSPC' },
+  ixic: { name: 'Nasdaq Composite', symbol: 'Nasdaq Composite', type: 'index', decimals: 2, tv: 'IXIC', yahoo: '^IXIC' },
+  rut: { name: 'Russell 2000', symbol: 'Russell 2000', type: 'index', decimals: 2, tv: 'RUT', yahoo: '^RUT' },
+  vix: { name: 'VIX', symbol: 'VIX', type: 'volatility', decimals: 2, tv: 'VIX', yahoo: '^VIX' },
+  ftse: { name: 'FTSE 100', symbol: 'FTSE 100', type: 'index', decimals: 2, yahoo: '^FTSE' },
+  dax: { name: 'DAX', symbol: 'DAX', type: 'index', decimals: 2, yahoo: '^GDAXI' },
+  cac: { name: 'CAC 40', symbol: 'CAC 40', type: 'index', decimals: 2, yahoo: '^FCHI' },
+  stoxx: { name: 'Euro Stoxx 50', symbol: 'Euro Stoxx 50', type: 'index', decimals: 2, yahoo: '^STOXX50E' },
+  nikkei: { name: 'Nikkei 225', symbol: 'Nikkei 225', type: 'index', decimals: 2, yahoo: '^N225' },
+  hsi: { name: 'Hang Seng', symbol: 'Hang Seng', type: 'index', decimals: 2, yahoo: '^HSI' },
+  shcomp: { name: 'Shanghai Composite', symbol: 'Shanghai Composite', type: 'index', decimals: 2, yahoo: '000001.SS' },
+  bvsp: { name: 'Ibovespa', symbol: 'IBOV', type: 'index', decimals: 2, yahoo: '^BVSP' },
+  mxx: { name: 'S&P/BMV IPC', symbol: 'MXX', type: 'index', decimals: 2, yahoo: '^MXX' },
 };
 
 const countryMap = {
@@ -39,6 +57,8 @@ const countryMap = {
   CAD: 'کانادا',
   CHF: 'سوئیس',
   CNY: 'چین',
+  BRL: 'برزیل',
+  MXN: 'مکزیک',
   All: 'همه بازارها',
 };
 
@@ -52,9 +72,13 @@ const tabs = [
 ];
 
 const MARKET_GROUPS = [
-  { key: 'us', title: 'آمریکا', label: 'US', ids: ['dji', 'gspc', 'ixic', 'vix'] },
-  { key: 'fx', title: 'ارزها', label: 'FX', ids: ['dxy', 'eurusd', 'gbpusd', 'usdjpy'] },
-  { key: 'alts', title: 'کالا و کریپتو', label: 'ALT', ids: ['gold', 'btc', 'rut'] },
+  { key: 'america', title: 'America', label: 'US', ids: ['dji', 'gspc', 'ixic', 'rut', 'vix'] },
+  { key: 'europe', title: 'Europe', label: 'EU', ids: ['ftse', 'dax', 'cac', 'stoxx'] },
+  { key: 'asia', title: 'Asia', label: 'ASIA', ids: ['nikkei', 'hsi', 'shcomp'] },
+  { key: 'latam', title: 'Latin America', label: 'LATAM', ids: ['bvsp', 'mxx'] },
+  { key: 'currency', title: 'Currency', label: 'FX', ids: ['dxy', 'eurusd', 'gbpusd', 'usdjpy', 'audusd', 'usdcad', 'usdchf'] },
+  { key: 'crypto', title: 'Cryptocurrency', label: 'CRYPTO', ids: ['btc', 'eth', 'sol'] },
+  { key: 'futures', title: 'Futures markets', label: 'FUT', ids: ['gold', 'silver', 'wti', 'brent', 'natgas'] },
 ];
 
 const impactMap = {
@@ -168,12 +192,12 @@ function compact(value) {
 
 function buildTradingViewUrl(id) {
   const code = instrumentMeta[id]?.tv;
-  return code ? `https://www.tradingview.com/symbols/${code}/` : null;
+  return code ? `https://www.tradingview.com/symbols/${encodeURIComponent(code)}/` : null;
 }
 
 function buildYahooUrl(id) {
   const code = instrumentMeta[id]?.yahoo;
-  return code ? `https://finance.yahoo.com/quote/${code}` : null;
+  return code ? `https://finance.yahoo.com/quote/${encodeURIComponent(code)}` : null;
 }
 
 function normalizeInstrument(id, item) {
@@ -641,9 +665,13 @@ export default function App() {
   };
 
   const sourceLabel = state.sourceMode === 'protected' ? 'نسخه محافظت‌شده Worker' : state.sourceMode === 'public' ? 'نسخه عمومی cache' : 'در حال اتصال';
+  const proxySource = dashboard?.meta?.proxySource || dashboard?.meta?.sourceUrl || '';
+  const sourceHint = state.sourceMode === 'protected'
+    ? 'اگر از لینک Worker/Proxy باز کرده‌ای و داده قدیمی ماند، مقدارهای SITE_ORIGIN و مخصوصاً DASHBOARD_JSON_URL را در Cloudflare Worker چک کن.'
+    : 'اگر از GitHub Pages باز کرده‌ای، باید workflow مربوط به deploy کامل شود و در صف Actionها cancel نشود.';
   const dataTimestamp = dashboard?.ts || 0;
   const dataStaleness = stalenessText(dataTimestamp, nowTs);
-  const dataIsStale = dataTimestamp ? nowTs - dataTimestamp > 15 * 60 * 1000 : false;
+  const dataIsStale = dataTimestamp ? nowTs - dataTimestamp > 35 * 60 * 1000 : false;
 
   if (state.loading && !dashboard) {
     return (
@@ -677,6 +705,7 @@ export default function App() {
           <div>
             <h1>داشبورد بازارها</h1>
             <div className="subtext">{sourceLabel} · آخرین snapshot: <span className="ltr-text">{faDateTime(dataTimestamp || state.lastLoaded || nowTs)}</span> · {dataStaleness} · ساعت تهران: <span className="ltr-text">{clock}</span></div>
+            <div className="subtext top-gap">{sourceHint}{proxySource ? <> · source: <span className="ltr-text">{proxySource}</span></> : null}</div>
           </div>
           <div className="header-actions wrap-gap">
             <span className={`live-badge ${state.sourceMode === 'public' ? 'badge-soft' : ''}`}>{state.sourceMode === 'protected' ? 'Protected' : 'Public cache'}</span>
@@ -687,7 +716,7 @@ export default function App() {
         </header>
 
         {state.error ? <div className="error-banner"><b>توجه:</b> {state.error}</div> : null}
-        {dataIsStale ? <div className="warn-banner"><b>داده قدیمی شده:</b> {dataStaleness}. اگر این وضعیت طولانی ماند، باید deploy-pages در GitHub دوباره اجرا شود.</div> : null}
+        {dataIsStale ? <div className="warn-banner"><b>داده قدیمی شده:</b> {dataStaleness}. {state.sourceMode === 'protected' ? 'اگر این نسخه را از Worker/Proxy باز کرده‌ای، Cloudflare Worker env را بررسی کن: DASHBOARD_JSON_URL و SITE_ORIGIN.' : 'اگر این نسخه را از GitHub Pages باز کرده‌ای، workflow deploy-react-site را در Actions بررسی کن و نگذار runها همدیگر را cancel کنند.'}</div> : null}
 
         {criticalAlerts.length ? (
           <div className="critical-strip">
@@ -742,7 +771,7 @@ export default function App() {
             <div className="hero-panel">
               <div>
                 <div className="section-title">رصد بازار به سبک finance board</div>
-                <div className="hero-note">الان علاوه بر طلا، فارکس و بیت‌کوین، شاخص‌های مهم مثل DXY، Dow، S&P 500، Nasdaq، Russell 2000 و VIX هم وارد سیستم شده‌اند. با کلیک روی هر نماد، نمودار و جزئیاتش عوض می‌شود.</div>
+                <div className="hero-note">حالا برد بازار به دسته‌های America، Europe، Asia، Latin America، Currency، Cryptocurrency و Futures markets تقسیم شده و با کلیک روی هر نماد، نمودار و جزئیات همان دارایی باز می‌شود.</div>
               </div>
               <div className="hero-actions">
                 <span className="badge">اخبار: {fa(newsRows.length)}</span>
@@ -859,6 +888,7 @@ export default function App() {
                     <option value="metal">فلزات</option>
                     <option value="crypto">کریپتو</option>
                     <option value="index">شاخص</option>
+                    <option value="commodity">کامودیتی</option>
                     <option value="volatility">نوسان</option>
                   </select>
                   <select className="mini-select" value={marketSort} onChange={(event) => setMarketSort(event.target.value)}>
