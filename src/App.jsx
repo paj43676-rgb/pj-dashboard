@@ -6,13 +6,16 @@ import { buildAlertFeed } from '../shared/market-intel.js';
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const REFRESH_MS = 30 * 1000;
 const TIMEFRAMES = [
-  ['s1m', '1M'],
-  ['s5', '5M'],
-  ['s15', '15M'],
-  ['s1h', '1H'],
-  ['s1d', '1D'],
-  ['s1w', '1W'],
+  ['d1', '1D'],
+  ['d5', '5D'],
+  ['m1', '1M'],
+  ['m6', '6M'],
+  ['ytd', 'YTD'],
+  ['y1', '1Y'],
+  ['y5', '5Y'],
+  ['max', 'MAX'],
 ];
+const SERIES_KEYS = [...new Set([...TIMEFRAMES.map(([key]) => key), 's1m', 's5', 's15', 's1h', 's1d', 's1w'])];
 const SETUP_FRAME_BY_HORIZON = { s: 's15', m: 's1h', l: 's1d' };
 
 const instrumentMeta = {
@@ -68,6 +71,7 @@ const tabs = [
   ['news', 'اخبار'],
   ['calendar', 'تقویم'],
   ['setups', 'ستاپ‌ها'],
+  ['api', 'API / Limits'],
   ['plan', 'پلن فنی'],
 ];
 
@@ -203,9 +207,9 @@ function buildYahooUrl(id) {
 function normalizeInstrument(id, item) {
   const meta = instrumentMeta[id] || { name: id, symbol: id.toUpperCase(), type: 'market', decimals: 2 };
   const frames = Object.fromEntries(
-    TIMEFRAMES.map(([key]) => [key, frameToPoints(item?.[key])]).filter(([, list]) => list.length),
+    SERIES_KEYS.map((key) => [key, frameToPoints(item?.[key])]).filter(([, list]) => list.length),
   );
-  const defaultFrame = TIMEFRAMES.find(([key]) => frames[key]?.length)?.[0] || 's1d';
+  const defaultFrame = TIMEFRAMES.find(([key]) => frames[key]?.length)?.[0] || 'd1';
   const defaultSeries = frames[defaultFrame] || [];
   const values = defaultSeries.map((point) => point.close);
   return {
@@ -282,7 +286,8 @@ export default function App() {
   const [marketSort, setMarketSort] = useState('default');
   const [onlyFavs, setOnlyFavs] = useState(false);
   const [selectedId, setSelectedId] = useState(() => storeGet('rfx_selected', 'gold'));
-  const [selectedFrame, setSelectedFrame] = useState(() => storeGet('rfx_frame', 's1d'));
+  const [selectedFrame, setSelectedFrame] = useState(() => storeGet('rfx_frame', 'd1'));
+  const [selectedMarketGroup, setSelectedMarketGroup] = useState(() => storeGet('rfx_market_group', 'america'));
   const [newsImpact, setNewsImpact] = useState('all');
   const [newsAsset, setNewsAsset] = useState('all');
   const [newsOrder, setNewsOrder] = useState('newest');
@@ -326,6 +331,10 @@ export default function App() {
   useEffect(() => {
     storeSet('rfx_frame', selectedFrame);
   }, [selectedFrame]);
+
+  useEffect(() => {
+    storeSet('rfx_market_group', selectedMarketGroup);
+  }, [selectedMarketGroup]);
 
   useEffect(() => {
     const timer = setInterval(() => setClock(faClock(Date.now())), 1000);
@@ -604,6 +613,26 @@ export default function App() {
     })).filter((group) => group.items.length);
   }, [marketRows]);
 
+  const activeMarketOverviewGroup = useMemo(() => marketOverviewGroups.find((group) => group.key === selectedMarketGroup) || marketOverviewGroups[0] || null, [marketOverviewGroups, selectedMarketGroup]);
+
+  const marketComparisonRows = useMemo(() => {
+    if (!activeMarketOverviewGroup) return [];
+    return [...activeMarketOverviewGroup.items].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+  }, [activeMarketOverviewGroup]);
+
+  const providerStatusRows = useMemo(() => {
+    return Object.entries(dashboard?.meta?.providerStatus || {}).map(([id, status]) => ({
+      id,
+      symbol: instrumentMeta[id]?.symbol || id,
+      name: instrumentMeta[id]?.name || id,
+      provider: status?.provider || 'unavailable',
+      ok: Boolean(status?.ok),
+      tried: Array.isArray(status?.tried) ? status.tried : [],
+      quotaText: 'Remaining quota is not exposed by the current static JSON builder yet.',
+      warning: Array.isArray(status?.tried) ? status.tried.find((item) => /missing|limit|429|403/i.test(item)) || '' : '',
+    }));
+  }, [dashboard]);
+
   useEffect(() => {
     if (!alertsRows.length) return;
     const liveKeys = new Set(alertsRows.map((item) => item.key));
@@ -666,11 +695,13 @@ export default function App() {
 
   const sourceLabel = state.sourceMode === 'protected' ? 'نسخه محافظت‌شده Worker' : state.sourceMode === 'public' ? 'نسخه عمومی cache' : 'در حال اتصال';
   const proxySource = dashboard?.meta?.proxySource || dashboard?.meta?.sourceUrl || '';
+  const proxyMode = dashboard?.meta?.proxyMode || '';
   const sourceHint = state.sourceMode === 'protected'
     ? 'اگر از لینک Worker/Proxy باز کرده‌ای و داده قدیمی ماند، مقدارهای SITE_ORIGIN و مخصوصاً DASHBOARD_JSON_URL را در Cloudflare Worker چک کن.'
     : 'اگر از GitHub Pages باز کرده‌ای، باید workflow مربوط به deploy کامل شود و در صف Actionها cancel نشود.';
   const dataTimestamp = dashboard?.ts || 0;
   const dataStaleness = stalenessText(dataTimestamp, nowTs);
+  const staleMinutes = dataTimestamp ? Math.max(0, Math.round((nowTs - dataTimestamp) / 60000)) : 0;
   const dataIsStale = dataTimestamp ? nowTs - dataTimestamp > 35 * 60 * 1000 : false;
 
   if (state.loading && !dashboard) {
@@ -704,8 +735,8 @@ export default function App() {
         <header className="page-header">
           <div>
             <h1>داشبورد بازارها</h1>
-            <div className="subtext">{sourceLabel} · آخرین snapshot: <span className="ltr-text">{faDateTime(dataTimestamp || state.lastLoaded || nowTs)}</span> · {dataStaleness} · ساعت تهران: <span className="ltr-text">{clock}</span></div>
-            <div className="subtext top-gap">{sourceHint}{proxySource ? <> · source: <span className="ltr-text">{proxySource}</span></> : null}</div>
+            <div className="subtext mixed-text">{sourceLabel} · آخرین snapshot: <span className="ltr-text">{faDateTime(dataTimestamp || state.lastLoaded || nowTs)}</span> · فاصله داده: <span className="ltr-text">{staleMinutes} min</span> · ساعت تهران: <span className="ltr-text">{clock}</span></div>
+            <div className="subtext top-gap mixed-text">{sourceHint}{proxyMode ? <> · mode: <span className="ltr-text">{proxyMode}</span></> : null}{proxySource ? <> · source: <span className="ltr-text">{proxySource}</span></> : null}</div>
           </div>
           <div className="header-actions wrap-gap">
             <span className={`live-badge ${state.sourceMode === 'public' ? 'badge-soft' : ''}`}>{state.sourceMode === 'protected' ? 'Protected' : 'Public cache'}</span>
@@ -715,8 +746,8 @@ export default function App() {
           </div>
         </header>
 
-        {state.error ? <div className="error-banner"><b>توجه:</b> {state.error}</div> : null}
-        {dataIsStale ? <div className="warn-banner"><b>داده قدیمی شده:</b> {dataStaleness}. {state.sourceMode === 'protected' ? 'اگر این نسخه را از Worker/Proxy باز کرده‌ای، Cloudflare Worker env را بررسی کن: DASHBOARD_JSON_URL و SITE_ORIGIN.' : 'اگر این نسخه را از GitHub Pages باز کرده‌ای، workflow deploy-react-site را در Actions بررسی کن و نگذار runها همدیگر را cancel کنند.'}</div> : null}
+        {state.error ? <div className="error-banner mixed-text"><b>توجه:</b> {state.error}</div> : null}
+        {dataIsStale ? <div className="warn-banner mixed-text"><b>داده قدیمی شده:</b> <span className="ltr-text">{staleMinutes} min</span> از آخرین snapshot گذشته. {state.sourceMode === 'protected' ? 'اگر این نسخه را از Worker/Proxy باز کرده‌ای، Cloudflare Worker env را بررسی کن: DASHBOARD_JSON_URL و SITE_ORIGIN.' : 'اگر این نسخه را از GitHub Pages باز کرده‌ای، workflow deploy-react-site را در Actions بررسی کن و نگذار runها همدیگر را cancel کنند.'}</div> : null}
 
         {criticalAlerts.length ? (
           <div className="critical-strip">
@@ -732,15 +763,23 @@ export default function App() {
           </div>
         ) : null}
 
-        <section className="global-market-board">
-          {marketOverviewGroups.map((group) => (
-            <div key={group.key} className="global-market-card">
+        <section className="market-group-stage">
+          <div className="market-group-tabs">
+            {marketOverviewGroups.map((group) => (
+              <button key={group.key} className={`market-group-tab ${activeMarketOverviewGroup?.key === group.key ? 'active' : ''}`} onClick={() => setSelectedMarketGroup(group.key)}>
+                <span className="ltr-text">{group.label}</span>
+                <b>{group.title}</b>
+              </button>
+            ))}
+          </div>
+          {activeMarketOverviewGroup ? (
+            <div className="global-market-card spotlight">
               <div className="global-market-head">
-                <span className="global-market-label ltr-text">{group.label}</span>
-                <div>{group.title}</div>
+                <span className="global-market-label ltr-text">{activeMarketOverviewGroup.label}</span>
+                <div className="mixed-text">{activeMarketOverviewGroup.title} · با کلیک روی هر نماد، نمودار بالا عوض می‌شود</div>
               </div>
-              <div className="global-market-list">
-                {group.items.map((item) => (
+              <div className="global-market-strip">
+                {activeMarketOverviewGroup.items.map((item) => (
                   <button key={item.id} className={`global-market-chip ${selectedId === item.id ? 'active' : ''}`} onClick={() => jumpToInstrument(item.id)}>
                     <div>
                       <div className="global-market-symbol ltr-text">{item.symbol}</div>
@@ -753,7 +792,7 @@ export default function App() {
                 ))}
               </div>
             </div>
-          ))}
+          ) : null}
         </section>
 
         <div className="tabs">
@@ -771,7 +810,7 @@ export default function App() {
             <div className="hero-panel">
               <div>
                 <div className="section-title">رصد بازار به سبک finance board</div>
-                <div className="hero-note">حالا برد بازار به دسته‌های America، Europe، Asia، Latin America، Currency، Cryptocurrency و Futures markets تقسیم شده و با کلیک روی هر نماد، نمودار و جزئیات همان دارایی باز می‌شود.</div>
+                <div className="hero-note">طبقه‌بندی بالا حالا مثل Google Finance گروه‌بندی شده است: ابتدا دسته بازار را انتخاب می‌کنی، بعد نمادهای همان دسته دیده می‌شوند، و با کلیک روی هر نماد، نمودار و جزئیات بالا فوراً عوض می‌شود.</div>
               </div>
               <div className="hero-actions">
                 <span className="badge">اخبار: {fa(newsRows.length)}</span>
@@ -807,7 +846,7 @@ export default function App() {
                     <div><span>RSI</span><b className="ltr-text">{currentAnalysis?.rsi?.toFixed(1) || '—'}</b></div>
                     <div><span>Low</span><b className="ltr-text">{fmt(currentChart.low, selectedInstrument.decimals)}</b></div>
                     <div><span>High</span><b className="ltr-text">{fmt(currentChart.high, selectedInstrument.decimals)}</b></div>
-                    <div><span>Updated</span><b className="ltr-text">{faDateTime(selectedInstrument.updatedAt)}</b><small>{ago(selectedInstrument.updatedAt, nowTs)}</small></div>
+                    <div><span>Last candle</span><b className="ltr-text">{faDateTime(selectedInstrument.updatedAt)}</b><small>{ago(selectedInstrument.updatedAt, nowTs)}</small></div>
                   </div>
                 </div>
 
@@ -900,7 +939,7 @@ export default function App() {
                   </select>
                   <label className="toggle-pill"><input type="checkbox" checked={onlyFavs} onChange={(event) => setOnlyFavs(event.target.checked)} /> فقط منتخب‌ها</label>
                 </div>
-                <div className="watchlist-meta">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)} · هشدار فعال: {fa(alertsRows.length)} · هشدار جدید: {fa(alertsNewCount)}</div>
+                <div className="watchlist-meta mixed-text">فارکس: {fa(marketTypeCounts.fx || 0)} · شاخص: {fa(marketTypeCounts.index || 0)} · کامودیتی: {fa(marketTypeCounts.commodity || 0)} · نوسان: {fa(marketTypeCounts.volatility || 0)} · هشدار فعال: {fa(alertsRows.length)} · هشدار جدید: {fa(alertsNewCount)}</div>
                 <div className="watchlist-list">
                   {visibleMarkets.map((item) => (
                     <button key={item.id} className={`watchlist-item ${selectedInstrument.id === item.id ? 'active' : ''}`} onClick={() => setSelectedId(item.id)}>
@@ -934,6 +973,29 @@ export default function App() {
                   <div className="summary-meta">{risk.text}</div>
                 </div>
               ))}
+            </div>
+
+            <div className="panel-card compare-panel">
+              <div className="row-between wrap-gap">
+                <div className="section-title">مقایسه بازارها</div>
+                <span className="badge mixed-text">{activeMarketOverviewGroup?.title || 'Market group'} · {fa(marketComparisonRows.length)} نماد</span>
+              </div>
+              <div className="market-compare-table">
+                <div className="market-compare-head ltr-text">
+                  <span>Symbol</span>
+                  <span>Price</span>
+                  <span>Change</span>
+                  <span>Snapshot</span>
+                </div>
+                {marketComparisonRows.map((item) => (
+                  <button key={item.id} className={`market-compare-row ${selectedId === item.id ? 'active' : ''}`} onClick={() => jumpToInstrument(item.id)}>
+                    <span className="ltr-text">{item.symbol}</span>
+                    <span className="ltr-text">{fmt(item.price, item.decimals)}</span>
+                    <span className={`ltr-text ${item.change >= 0 ? 'up' : 'down'}`}>{item.change >= 0 ? '+' : ''}{item.changePct.toFixed(2)}%</span>
+                    <span className="ltr-text">{ago(item.updatedAt, nowTs)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="summary-grid">
@@ -1019,7 +1081,7 @@ export default function App() {
               {filteredNews.map((item) => (
                 <article key={item.key} className={`news-item ${newsSeen.includes(item.key) ? '' : 'fresh'}`}>
                   <div className="news-time">
-                    <div>{ago(item.date)}</div>
+                    <div>{ago(item.date, nowTs)}</div>
                     <div className="news-exact">{faDateTime(item.date)}</div>
                   </div>
                   <div className="news-body">
@@ -1068,6 +1130,30 @@ export default function App() {
                   <div dir="ltr"><span>پیش‌بینی</span>{item.forecast}</div>
                   <div dir="ltr"><span>اعلام‌شده</span>{item.actual}</div>
                   <div><span>اثر</span><b className={`tag ${impactMap[item.impact]?.[1] || 'tag-low'}`}>{impactMap[item.impact]?.[0] || 'عادی'}</b></div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'api' && (
+          <section>
+            <div className="section-title">API / Limits</div>
+            <div className="hero-note section-gap">این تب فعلاً وضعیت providerها را نشان می‌دهد. باقیمانده واقعی quota هنوز از سمت backend ذخیره نمی‌شود، بنابراین remaining دقیق برای همه APIها هنوز قابل نمایش نیست.</div>
+            <div className="api-grid">
+              {providerStatusRows.map((row) => (
+                <div key={row.id} className="panel-card api-card">
+                  <div className="row-between wrap-gap">
+                    <div>
+                      <div className="pred-title mixed-text">{row.name}</div>
+                      <div className="summary-meta ltr-text">{row.symbol}</div>
+                    </div>
+                    <span className={`tag ${row.ok ? 'tag-buy' : 'tag-sell'}`}>{row.ok ? 'OK' : 'FAIL'}</span>
+                  </div>
+                  <div className="api-kv mixed-text"><span>Provider:</span><b className="ltr-text">{row.provider}</b></div>
+                  <div className="api-kv mixed-text"><span>Quota:</span><b>{row.quotaText}</b></div>
+                  <div className="api-kv mixed-text"><span>Warnings:</span><b>{row.warning || 'none visible'}</b></div>
+                  <div className="summary-meta top-gap-tight mixed-text">{row.tried.join(' | ') || 'single source'}</div>
                 </div>
               ))}
             </div>
