@@ -202,6 +202,17 @@ const FRAMES = {
   s1w: { limit: 104, td: '1week', yahooInterval: '1wk', yahooRange: '2y', binance: '1w', coinbaseGranularity: 604800, coinbaseHours: 104 * 24 * 7 },
 };
 
+const DISPLAY_FRAMES = {
+  d1: { limit: 288, yahooInterval: '5m', yahooRange: '1d' },
+  d5: { limit: 240, yahooInterval: '30m', yahooRange: '5d' },
+  m1: { limit: 31, yahooInterval: '1d', yahooRange: '1mo' },
+  m6: { limit: 186, yahooInterval: '1d', yahooRange: '6mo' },
+  ytd: { limit: 280, yahooInterval: '1d', yahooRange: 'ytd' },
+  y1: { limit: 320, yahooInterval: '1d', yahooRange: '1y' },
+  y5: { limit: 320, yahooInterval: '1wk', yahooRange: '5y' },
+  max: { limit: 360, yahooInterval: '1mo', yahooRange: 'max' },
+};
+
 const FEEDS = [
   ['https://www.fxstreet.com/rss/news', 'FXStreet'],
   ['https://www.forexlive.com/feed/news', 'ForexLive'],
@@ -267,6 +278,20 @@ async function yahooChart(symbol, interval, range) {
   };
 }
 
+async function addYahooDisplayFrames(instrument, config) {
+  if (!config.yahoo) return instrument;
+  for (const [key, frame] of Object.entries(DISPLAY_FRAMES)) {
+    try {
+      const chart = await yahooChart(config.yahoo, frame.yahooInterval, frame.yahooRange);
+      instrument[key] = normalizeSeries(chart.points, config.decimals, frame.limit);
+      await sleep(120);
+    } catch {
+      // ignore display timeframe failure
+    }
+  }
+  return instrument;
+}
+
 async function buildFromYahoo(id, config) {
   const daily = await yahooChart(config.yahoo, FRAMES.s1d.yahooInterval, FRAMES.s1d.yahooRange);
   const instrument = {
@@ -288,6 +313,7 @@ async function buildFromYahoo(id, config) {
     }
   }
 
+  await addYahooDisplayFrames(instrument, config);
   return instrument;
 }
 
@@ -325,6 +351,7 @@ async function buildFromTwelve(id, config, apiKey) {
     }
   }
 
+  await addYahooDisplayFrames(instrument, config);
   return instrument;
 }
 
@@ -375,6 +402,7 @@ async function buildBtcFromBinance(config) {
     instrument[key] = normalizeSeries(points, config.decimals, frame.limit);
     await sleep(150);
   }
+  await addYahooDisplayFrames(instrument, config);
   return instrument;
 }
 
@@ -416,6 +444,7 @@ async function buildBtcFromCoinbase(config) {
       // ignore
     }
   }
+  await addYahooDisplayFrames(instrument, config);
   return instrument;
 }
 
@@ -424,13 +453,15 @@ async function buildBtcFromCoinGecko(config, demoKey) {
   const simple = await fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${config.coingecko}&vs_currencies=usd&include_24hr_change=true`, { headers: { ...DEFAULT_HEADERS, ...headers } });
   const market = await fetchJSON(`https://api.coingecko.com/api/v3/coins/${config.coingecko}/market_chart?vs_currency=usd&days=30&interval=daily`, { headers: { ...DEFAULT_HEADERS, ...headers } });
   const dailyPoints = (market.prices || []).map(([t, c]) => ({ t, c: Number(c) }));
-  return {
+  const instrument = {
     p: round(Number(simple?.bitcoin?.usd), config.decimals),
     pc: round(Number(simple?.bitcoin?.usd) / (1 + Number(simple?.bitcoin?.usd_24h_change || 0) / 100), config.decimals),
     provider: 'coingecko',
     providerChain: ['coingecko'],
     s1d: normalizeSeries(dailyPoints, config.decimals, FRAMES.s1d.limit),
   };
+  await addYahooDisplayFrames(instrument, config);
+  return instrument;
 }
 
 async function buildInstrument(id, config, env, providerLog) {
